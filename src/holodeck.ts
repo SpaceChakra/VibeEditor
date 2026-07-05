@@ -43,7 +43,6 @@ const characterSelect = document.getElementById('characterSelect') as HTMLSelect
 const poseSelect = document.getElementById('poseSelect') as HTMLSelectElement;
 const levelSelect = document.getElementById('levelSelect') as HTMLSelectElement;
 const pauseToggle = document.getElementById('pauseToggle') as HTMLInputElement;
-const repeatToggle = document.getElementById('repeatToggle') as HTMLInputElement;
 const poseStatus = document.getElementById('poseStatus') as HTMLDivElement;
 const controlPanel = document.getElementById('controlPanel') as HTMLDivElement;
 const panelHandle = document.getElementById('panelHandle') as HTMLButtonElement;
@@ -995,7 +994,6 @@ function choosePlaylistEntry(entryIndex: number, keepTransition = true, syncSele
 
 function getNextPlaylistIndex() {
   if (playlistPoseIndexes.length === 0) return activePlaylistIndex;
-  if (repeatToggle.checked) return activePlaylistIndex;
   if (playlistPoseIndexes[activePlaylistIndex] !== activePoseIndex) return 0;
   return (activePlaylistIndex + 1) % playlistPoseIndexes.length;
 }
