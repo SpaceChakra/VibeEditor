@@ -851,7 +851,11 @@ function choosePose(index: number, keepTransition = true, syncSelect = true) {
   previousPoseIndex = activePoseIndex;
   activePoseIndex = ((index % POSES.length) + POSES.length) % POSES.length;
   if (syncSelect) syncPoseSelectToActive();
-  transitionFromMap = keepTransition
+  // The transition blend only advances while playing (transitionElapsed is
+  // frozen when paused), so keeping a transition while paused would leave mix
+  // stuck at 0 and render the PREVIOUS pose, one behind the selection. When
+  // paused, snap straight to the chosen pose instead.
+  transitionFromMap = keepTransition && !pauseToggle.checked
     ? POSES[previousPoseIndex].sample(Math.min(1, poseElapsed / POSES[previousPoseIndex].duration), rig.profile.scale, baseState)
     : null;
   poseElapsed = 0;
