@@ -11,6 +11,7 @@ type RigKey = keyof CharacterRig & string;
 type BoneState = { pos: THREE.Vector3; rot: THREE.Euler; scl: THREE.Vector3 };
 type PoseOverride = { pos?: VecTuple; rot?: VecTuple; scl?: VecTuple };
 type PoseMap = Partial<Record<RigKey, PoseOverride>>;
+type PanelState = 'collapsed' | 'open' | 'expanded';
 type PoseDef = {
   id: string;
   label: string;
@@ -100,6 +101,7 @@ let lastTime = performance.now();
 let panelPointerY = 0;
 let panelPointerActive = false;
 let suppressPanelClick = false;
+let panelState: PanelState = 'open';
 let loadingHideTimer = 0;
 let poseSelectInteracting = false;
 
@@ -900,15 +902,25 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 
-function setPanelCollapsed(collapsed: boolean) {
-  controlPanel.classList.toggle('is-collapsed', collapsed);
-  controlPanel.classList.toggle('is-open', !collapsed);
-  panelHandle.setAttribute('aria-expanded', String(!collapsed));
-  panelHandle.setAttribute('aria-label', collapsed ? 'Open controls' : 'Collapse controls');
+function setPanelState(nextState: PanelState) {
+  panelState = nextState;
+  controlPanel.classList.toggle('is-collapsed', panelState === 'collapsed');
+  controlPanel.classList.toggle('is-open', panelState === 'open');
+  controlPanel.classList.toggle('is-expanded', panelState === 'expanded');
+  panelHandle.setAttribute('aria-expanded', String(panelState !== 'collapsed'));
+  panelHandle.setAttribute(
+    'aria-label',
+    panelState === 'collapsed'
+      ? 'Open controls'
+      : panelState === 'open'
+        ? 'Collapse controls'
+        : 'Collapse controls',
+  );
 }
 
 function togglePanel() {
-  setPanelCollapsed(!controlPanel.classList.contains('is-collapsed'));
+  const nextState: PanelState = panelState === 'collapsed' ? 'open' : panelState === 'expanded' ? 'open' : 'collapsed';
+  setPanelState(nextState);
 }
 
 function beginPanelGesture(event: PointerEvent) {
@@ -925,8 +937,15 @@ function finishPanelGesture(event: PointerEvent) {
   panelPointerActive = false;
   controlPanel.releasePointerCapture(event.pointerId);
   suppressPanelClick = true;
-  if (Math.abs(delta) >= 18) setPanelCollapsed(delta > 0);
-  else togglePanel();
+  if (Math.abs(delta) >= 18) {
+    if (delta < 0) {
+      setPanelState(panelState === 'collapsed' ? 'open' : 'expanded');
+    } else {
+      setPanelState(panelState === 'expanded' ? 'open' : 'collapsed');
+    }
+  } else {
+    togglePanel();
+  }
 }
 
 function handlePanelClick() {
