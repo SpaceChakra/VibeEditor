@@ -1120,7 +1120,7 @@ function applyPose(toMap: PoseMap, fromMap: PoseMap | null, mix: number) {
 }
 
 function isPoseSelectInteracting() {
-  return poseSelectInteracting || document.activeElement === poseSelect;
+  return poseSelectInteracting;
 }
 
 function syncPoseSelectToActive() {
@@ -1292,7 +1292,6 @@ withLoading(() => {
 window.addEventListener('resize', resize);
 characterSelect.addEventListener('change', () => withLoading(() => loadCharacter(Number(characterSelect.value))));
 poseSelect.addEventListener('pointerdown', () => { poseSelectInteracting = true; });
-poseSelect.addEventListener('focus', () => { poseSelectInteracting = true; });
 poseSelect.addEventListener('keydown', () => { poseSelectInteracting = true; });
 poseSelect.addEventListener('blur', () => {
   poseSelectInteracting = false;
