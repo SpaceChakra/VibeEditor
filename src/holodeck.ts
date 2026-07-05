@@ -38,6 +38,7 @@ const repeatToggle = document.getElementById('repeatToggle') as HTMLInputElement
 const poseStatus = document.getElementById('poseStatus') as HTMLDivElement;
 const controlPanel = document.getElementById('controlPanel') as HTMLDivElement;
 const panelHandle = document.getElementById('panelHandle') as HTMLButtonElement;
+const loadingSpinner = document.getElementById('loadingSpinner') as HTMLDivElement;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -75,6 +76,9 @@ rim.position.set(0, 3.2, -5);
 scene.add(rim);
 
 const envMgr = new EnvironmentManager(scene);
+const FOOT_CLEARANCE = 0.006;
+const STANDING_SURFACE_Y = [0.05, 0, 0, 0];
+const footBounds = new THREE.Box3();
 let rig: CharacterRig | null = null;
 let baseState: Partial<Record<RigKey, BoneState>> = {};
 let activePoseIndex = 0;
@@ -87,8 +91,9 @@ let lastTime = performance.now();
 let panelPointerY = 0;
 let panelPointerActive = false;
 let suppressPanelClick = false;
+let loadingHideTimer = 0;
 
-const POSES: PoseDef[] = [
+const SHOWCASE_POSES: PoseDef[] = [
   {
     id: 'idle',
     label: 'Idle Breathing',
@@ -220,6 +225,64 @@ const POSES: PoseDef[] = [
   },
 ];
 
+const EDITOR_POSE_PRESETS: Array<{ id: string; label: string; source: string }> = [
+  { id: 'idle', label: 'Idle (standing)', source: 'idle' },
+  { id: 'intro_setup', label: 'Intro - Setup coil (anticipation)', source: 'guard' },
+  { id: 'intro_execution', label: 'Intro - Execution hoist (peak)', source: 'strike' },
+  { id: 'intro_recovery', label: 'Intro - Recovery settle (f=0.5)', source: 'idle' },
+  { id: 'guard_high', label: 'Guard - High (cross-brace)', source: 'guard' },
+  { id: 'guard_low', label: 'Guard - Low (deep crouch)', source: 'guard' },
+  { id: 'guard_mid', label: 'Guard - Mid / fallback', source: 'guard' },
+  { id: 'air_guard', label: 'Air Guard (arms overhead)', source: 'jump' },
+  { id: 'clash', label: 'Clash / Sword Lock', source: 'guard' },
+  { id: 'victory_antic', label: 'Victory - Anticipation (coil)', source: 'guard' },
+  { id: 'victory_burst', label: 'Victory - Burst (leap apex)', source: 'jump' },
+  { id: 'victory', label: 'Victory - Settle (held)', source: 'victory' },
+  { id: 'jump_startup', label: 'Jump - Startup coil (startupP=1)', source: 'guard' },
+  { id: 'jump_ascend', label: 'Jump - Ascend (launch=1)', source: 'jump' },
+  { id: 'jump_descend', label: 'Jump - Descend (fall=1)', source: 'jump' },
+  { id: 'jump_land', label: 'Jump - Landing squash (recoveryP=0.25)', source: 'guard' },
+  { id: 'dash_forward', label: 'Dash - Forward', source: 'dash' },
+  { id: 'dash_back', label: 'Dash - Back', source: 'dash' },
+  { id: 'dodge_side', label: 'Dodge - Side step (peak)', source: 'dash' },
+  { id: 'atk_high_windup', label: 'Attack High - Windup (startupP=1)', source: 'guard' },
+  { id: 'atk_high_strike', label: 'Attack High - Strike (activeP=1)', source: 'strike' },
+  { id: 'atk_high_recovery', label: 'Attack High - Recovery (recoveryP=0.5)', source: 'idle' },
+  { id: 'atk_mid_windup', label: 'Attack Mid - Windup (startupP=1)', source: 'guard' },
+  { id: 'atk_mid_strike', label: 'Attack Mid - Strike (activeP=1)', source: 'strike' },
+  { id: 'atk_mid_recovery', label: 'Attack Mid - Recovery (recoveryP=0.5)', source: 'idle' },
+  { id: 'atk_low_windup', label: 'Attack Low - Windup (startupP=1)', source: 'guard' },
+  { id: 'atk_low_strike', label: 'Attack Low - Strike (activeP=1)', source: 'strike' },
+  { id: 'atk_low_recovery', label: 'Attack Low - Recovery (recoveryP=0.5)', source: 'idle' },
+  { id: 'atk_kick_chamber', label: 'Attack Kick - Chamber (startupP=1)', source: 'guard' },
+  { id: 'atk_kick_strike', label: 'Attack Kick - Extension (activeP=1)', source: 'strike' },
+  { id: 'atk_kick_recovery', label: 'Attack Kick - Re-chamber (recoveryP=0.5)', source: 'idle' },
+  { id: 'atk_headbutt_windup', label: 'Attack Headbutt - Windup (startupP=1)', source: 'guard' },
+  { id: 'atk_headbutt_strike', label: 'Attack Headbutt - Lunge (activeP=1)', source: 'dash' },
+  { id: 'atk_headbutt_recovery', label: 'Attack Headbutt - Recovery (recoveryP=0.5)', source: 'idle' },
+  { id: 'lotus', label: 'Lotus / Meditation (seated)', source: 'idle' },
+  { id: 'sample_dive', label: 'Sample Ultimate - Dive', source: 'jump' },
+  { id: 'dead_stagger', label: 'Dead - Stagger (kneeling collapse)', source: 'guard' },
+  { id: 'dead_forward', label: 'Dead - Layout Forward (lying on face)', source: 'idle' },
+  { id: 'dead_back', label: 'Dead - Layout Back (lying on back)', source: 'idle' },
+  { id: 'dead_side', label: 'Dead - Layout Side (lying on side)', source: 'idle' },
+];
+
+const SHOWCASE_BY_ID = new Map(SHOWCASE_POSES.map(pose => [pose.id, pose]));
+const POSES: PoseDef[] = [
+  ...SHOWCASE_POSES,
+  ...EDITOR_POSE_PRESETS.map(preset => {
+    const source = SHOWCASE_BY_ID.get(preset.source) || SHOWCASE_POSES[0];
+    return {
+      ...source,
+      id: `editor_${preset.id}`,
+      label: preset.label,
+      duration: 1,
+      hold: 1.2,
+    };
+  }),
+];
+
 function offsetPos(base: Partial<Record<RigKey, BoneState>>, key: RigKey, x: number, y: number, z: number): VecTuple {
   const pos = base[key]?.pos || new THREE.Vector3();
   return [pos.x + x, pos.y + y, pos.z + z];
@@ -262,6 +325,36 @@ function disposeObject(root: THREE.Object3D) {
   });
 }
 
+function getStandingSurfaceY() {
+  return STANDING_SURFACE_Y[Number(levelSelect.value)] ?? 0;
+}
+
+function keepCharacterOnSurface() {
+  if (!rig) return;
+  rig.mesh.updateMatrixWorld(true);
+  footBounds.makeEmpty();
+  footBounds.expandByObject(rig.lFoot);
+  footBounds.expandByObject(rig.rFoot);
+  if (footBounds.isEmpty()) footBounds.setFromObject(rig.mesh);
+
+  const offset = getStandingSurfaceY() + FOOT_CLEARANCE - footBounds.min.y;
+  if (!Number.isFinite(offset) || Math.abs(offset) < 0.0001) return;
+  rig.mesh.position.y += offset;
+  rig.mesh.updateMatrixWorld(true);
+}
+
+function withLoading(fn: () => void) {
+  window.clearTimeout(loadingHideTimer);
+  loadingSpinner.classList.add('is-loading');
+  try {
+    fn();
+  } finally {
+    loadingHideTimer = window.setTimeout(() => {
+      loadingSpinner.classList.remove('is-loading');
+    }, 420);
+  }
+}
+
 function loadCharacter(index: number) {
   if (rig) {
     scene.remove(rig.mesh);
@@ -282,6 +375,7 @@ function loadCharacter(index: number) {
   transitionElapsed = 0;
   transitionFromMap = null;
   applyPose(POSES[activePoseIndex].sample(0, rig.profile.scale, baseState), null, 1);
+  keepCharacterOnSurface();
 }
 
 function captureBaseState(nextRig: CharacterRig) {
@@ -339,6 +433,7 @@ function choosePose(index: number, keepTransition = true) {
 function loadLevel(index: number) {
   envMgr.buildEnvironment(index);
   levelSelect.value = String(index);
+  keepCharacterOnSurface();
 }
 
 function update(dt: number) {
@@ -360,6 +455,7 @@ function update(dt: number) {
   const mix = transitionFromMap ? Math.min(1, transitionElapsed / 0.32) : 1;
   applyPose(targetMap, transitionFromMap, easeInOut(mix));
   if (mix >= 1) transitionFromMap = null;
+  keepCharacterOnSurface();
 
   const label = `${CHARACTER_OPTIONS[Number(characterSelect.value)]?.label || 'Character'} - ${pose.label}`;
   poseStatus.textContent = pauseToggle.checked ? `${label} (paused)` : label;
@@ -424,15 +520,17 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 
-populateControls();
-loadLevel(0);
-loadCharacter(0);
-choosePose(0, false);
-resize();
+withLoading(() => {
+  populateControls();
+  loadLevel(0);
+  loadCharacter(0);
+  choosePose(0, false);
+  resize();
+});
 window.addEventListener('resize', resize);
-characterSelect.addEventListener('change', () => loadCharacter(Number(characterSelect.value)));
-poseSelect.addEventListener('change', () => choosePose(Number(poseSelect.value)));
-levelSelect.addEventListener('change', () => loadLevel(Number(levelSelect.value)));
+characterSelect.addEventListener('change', () => withLoading(() => loadCharacter(Number(characterSelect.value))));
+poseSelect.addEventListener('change', () => withLoading(() => choosePose(Number(poseSelect.value))));
+levelSelect.addEventListener('change', () => withLoading(() => loadLevel(Number(levelSelect.value))));
 panelHandle.addEventListener('click', handlePanelClick);
 controlPanel.addEventListener('pointerdown', beginPanelGesture);
 controlPanel.addEventListener('pointerup', finishPanelGesture);
