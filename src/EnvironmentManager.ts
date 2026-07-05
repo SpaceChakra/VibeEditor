@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 export const LEVELS = [
+  { name: 'Holodeck', description: 'A polished showcase stage for previewing procedural characters and pose cycles.', pal: 0 },
   { name: 'Sample Yard', description: 'A neutral outdoor test space with modular floor plates, walls, crates, and beams.', pal: 0 },
   { name: 'Material Lab', description: 'A compact material preview stage with simple props for texture and lighting checks.', pal: 1 },
   { name: 'Breakaway Test', description: 'A small destructible-object sandbox made from duplicated blocks and panels.', pal: 2 },
@@ -34,9 +35,10 @@ export class EnvironmentManager {
     this.environmentGroup.name = `sample-environment-${index}`;
 
     const level = ((index % LEVELS.length) + LEVELS.length) % LEVELS.length;
-    if (level === 1) this.buildMaterialLab();
-    else if (level === 2) this.buildBreakawayTest();
-    else this.buildSampleYard();
+    if (level === 1) this.buildSampleYard();
+    else if (level === 2) this.buildMaterialLab();
+    else if (level === 3) this.buildBreakawayTest();
+    else this.buildHolodeck();
   }
 
   clearEnvironment() {
@@ -179,6 +181,35 @@ export class EnvironmentManager {
     this.addLight('cool-fill', [-4, 3, 4], 0x9ab8ff, 0.8);
   }
 
+  private buildHolodeck() {
+    const floorMat = this.makeTexturedMat(this.loadSilverMetal(), 0xd3d6da, 0.24, 0.72, 8, 8);
+    const wallMat = this.makeTexturedMat(this.loadMetal(), 0x25313c, 0.36, 0.45, 5, 2);
+    const panelMat = this.makeTexturedMat(this.loadConcrete(), 0x4e5963, 0.7, 0.0, 3, 2);
+    const railMat = this.makeTexturedMat(this.loadWood(), 0x7f5738, 0.52, 0.0, 5, 1);
+    const glowBlue = this.makeGlowMat(0x50b8ff, 1.8);
+    const glowGold = this.makeGlowMat(0xf0c987, 1.4);
+
+    this.addFloor(floorMat, 18, 12);
+    this.addBox('holodeck-back-wall', [18, 2.8, 0.22], [0, 1.4, -5.9], wallMat);
+    this.addBox('holodeck-left-return', [0.22, 2.4, 7.5], [-9, 1.2, -2.1], panelMat);
+    this.addBox('holodeck-right-return', [0.22, 2.4, 7.5], [9, 1.2, -2.1], panelMat);
+
+    for (let x = -7.5; x <= 7.5; x += 3) {
+      this.addBox(`holodeck-wall-panel-${x}`, [1.35, 1.5, 0.08], [x, 1.35, -5.75], panelMat.clone());
+      this.addBox(`holodeck-light-bar-${x}`, [1.1, 0.045, 0.06], [x, 2.18, -5.66], glowBlue.clone());
+      this.addBox(`holodeck-floor-light-${x}`, [1.1, 0.035, 0.06], [x, 0.03, -4.35], glowGold.clone());
+    }
+
+    this.addBox('holodeck-rear-rail', [13.5, 0.15, 0.18], [0, 0.85, -4.55], railMat);
+    this.addBox('holodeck-left-plinth', [1.4, 0.32, 1.4], [-5.8, 0.16, -1.8], this.makeTexturedMat(this.loadRock(), 0x7c8588, 0.74, 0.0, 1.2, 1.2));
+    this.addBox('holodeck-right-plinth', [1.4, 0.32, 1.4], [5.8, 0.16, -1.8], this.makeTexturedMat(this.loadRock(), 0x7c8588, 0.74, 0.0, 1.2, 1.2));
+    this.addBox('holodeck-center-mark', [2.2, 0.035, 2.2], [0, 0.03, 0.35], this.makeGlowMat(0x2f89ff, 0.45));
+
+    this.addLight('holodeck-key', [3.5, 6.2, 3.8], 0xfff0dd, 2.4);
+    this.addLight('holodeck-rim-left', [-5.5, 3.6, -3.5], 0x72bfff, 1.6);
+    this.addLight('holodeck-rim-right', [5.5, 3.2, -3.5], 0xffd18a, 1.1);
+  }
+
   private buildMaterialLab() {
     this.addFloor(this.makeTexturedMat(this.loadConcrete(), 0x505762, 0.76, 0.0, 5, 4), 12, 8);
     const mats = [
@@ -244,6 +275,16 @@ export class EnvironmentManager {
 
   private makeMat(color: number, roughness: number, metalness: number) {
     return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  }
+
+  private makeGlowMat(color: number, intensity: number) {
+    return new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: intensity,
+      roughness: 0.32,
+      metalness: 0.1,
+    });
   }
 
   private makeTexturedMat(set: TextureSet, color: number, roughness: number, metalness: number, repeatU = 1, repeatV = 1) {

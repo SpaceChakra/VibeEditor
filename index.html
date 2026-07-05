@@ -3,10 +3,65 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VibeEditor</title>
-  <meta http-equiv="refresh" content="0; url=./editor.html" />
+  <title>VibeEditor Holodeck</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2315171c'/%3E%3Cpath d='M12 18h40v28H12z' fill='none' stroke='%23f0c987' stroke-width='4'/%3E%3Cpath d='M22 28h20M22 38h20' stroke='%2350b8ff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #15171c; color: #e6eaf0; font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; }
+    #app { position: relative; width: 100vw; height: 100vh; }
+    #stage { position: absolute; inset: 0; }
+    #stage canvas { display: block; width: 100%; height: 100%; }
+    #hud { position: absolute; left: 16px; right: 16px; top: 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; pointer-events: none; }
+    #brand { padding: 10px 12px; background: rgba(20, 23, 30, 0.82); border: 1px solid rgba(240, 201, 135, 0.35); border-radius: 8px; backdrop-filter: blur(8px); }
+    #brand h1 { margin: 0 0 4px; font-size: 14px; color: #f0c987; letter-spacing: 0; }
+    #poseStatus { font-size: 11px; color: #aab4c3; }
+    #controls { width: min(420px, calc(100vw - 32px)); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; background: rgba(20, 23, 30, 0.86); border: 1px solid rgba(122, 134, 156, 0.35); border-radius: 8px; backdrop-filter: blur(8px); pointer-events: auto; }
+    label { display: grid; gap: 4px; font-size: 10px; color: #9aa3b2; text-transform: uppercase; letter-spacing: 0; }
+    select { width: 100%; background: #11131a; color: #e6eaf0; border: 1px solid #333a47; border-radius: 5px; padding: 7px 8px; font: inherit; font-size: 12px; }
+    .toggle-row { display: flex; align-items: center; gap: 8px; min-height: 33px; padding: 7px 8px; background: #11131a; border: 1px solid #333a47; border-radius: 5px; color: #d8dce3; font-size: 12px; text-transform: none; }
+    .toggle-row input { width: 16px; height: 16px; accent-color: #f0c987; }
+    #editorLink { color: #f0c987; text-decoration: none; font-size: 11px; }
+    #editorLink:hover { text-decoration: underline; }
+    @media (max-width: 760px) {
+      #hud { flex-direction: column; align-items: stretch; }
+      #controls { grid-template-columns: 1fr; }
+      #brand { width: fit-content; max-width: 100%; }
+    }
+  </style>
 </head>
 <body>
-  <a href="./editor.html">Open VibeEditor</a>
+  <div id="app">
+    <div id="stage"></div>
+    <div id="hud">
+      <div id="brand">
+        <h1>VibeEditor Holodeck</h1>
+        <div id="poseStatus">Loading</div>
+        <a id="editorLink" href="./editor.html">Open editor</a>
+      </div>
+      <div id="controls">
+        <label>
+          Character
+          <select id="characterSelect"></select>
+        </label>
+        <label>
+          Animation / Pose
+          <select id="poseSelect"></select>
+        </label>
+        <label>
+          Level Design
+          <select id="levelSelect"></select>
+        </label>
+        <label class="toggle-row">
+          <input id="pauseToggle" type="checkbox" />
+          Pause animation
+        </label>
+        <label class="toggle-row">
+          <input id="repeatToggle" type="checkbox" />
+          Repeat current animation
+        </label>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/holodeck.ts"></script>
 </body>
 </html>
