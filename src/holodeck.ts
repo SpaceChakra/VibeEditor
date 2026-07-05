@@ -48,6 +48,10 @@ const poseStatus = document.getElementById('poseStatus') as HTMLDivElement;
 const controlPanel = document.getElementById('controlPanel') as HTMLDivElement;
 const panelHandle = document.getElementById('panelHandle') as HTMLButtonElement;
 const loadingSpinner = document.getElementById('loadingSpinner') as HTMLDivElement;
+const playlistAddButton = document.getElementById('playlistAddButton') as HTMLButtonElement;
+const playlistStartButton = document.getElementById('playlistStartButton') as HTMLButtonElement;
+const playlistResetButton = document.getElementById('playlistResetButton') as HTMLButtonElement;
+const playlistList = document.getElementById('playlistList') as HTMLOListElement;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -104,6 +108,8 @@ let suppressPanelClick = false;
 let panelState: PanelState = 'open';
 let loadingHideTimer = 0;
 let poseSelectInteracting = false;
+let playlistPoseIndexes: number[] = [];
+let activePlaylistIndex = 0;
 
 const SHOWCASE_POSES: PoseDef[] = [
   {
@@ -694,6 +700,8 @@ const POSES: PoseDef[] = [
   ...EDITOR_POSES,
 ];
 
+playlistPoseIndexes = POSES.map((_, i) => i);
+
 function offsetPos(base: Partial<Record<RigKey, BoneState>>, key: RigKey, x: number, y: number, z: number): VecTuple {
   const pos = base[key]?.pos || new THREE.Vector3();
   return [pos.x + x, pos.y + y, pos.z + z];
@@ -724,6 +732,113 @@ function populateControls() {
     opt.textContent = level.name;
     return opt;
   }));
+
+  renderPlaylist();
+}
+
+function createPoseOptions(selectedPoseIndex: number) {
+  return POSES.map((pose, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = pose.label;
+    opt.selected = i === selectedPoseIndex;
+    return opt;
+  });
+}
+
+function markActivePlaylistEntry() {
+  [...playlistList.children].forEach((child, i) => {
+    child.classList.toggle('is-active', i === activePlaylistIndex);
+    child.toggleAttribute('aria-current', i === activePlaylistIndex);
+  });
+}
+
+function renderPlaylist() {
+  playlistList.replaceChildren(...playlistPoseIndexes.map((poseIndex, entryIndex) => {
+    const item = document.createElement('li');
+    item.className = 'playlist-item';
+
+    const select = document.createElement('select');
+    select.className = 'playlist-pose-select';
+    select.setAttribute('aria-label', `Playlist slot ${entryIndex + 1}`);
+    select.replaceChildren(...createPoseOptions(poseIndex));
+    select.addEventListener('change', () => {
+      playlistPoseIndexes[entryIndex] = Number(select.value);
+      choosePlaylistEntry(entryIndex, true, true);
+    });
+
+    const tools = document.createElement('div');
+    tools.className = 'playlist-tools';
+
+    const upButton = makePlaylistButton('Up', entryIndex === 0, () => movePlaylistEntry(entryIndex, entryIndex - 1));
+    const downButton = makePlaylistButton('Down', entryIndex === playlistPoseIndexes.length - 1, () => movePlaylistEntry(entryIndex, entryIndex + 1));
+    const copyButton = makePlaylistButton('Copy', false, () => duplicatePlaylistEntry(entryIndex));
+    const removeButton = makePlaylistButton('Remove', playlistPoseIndexes.length <= 1, () => removePlaylistEntry(entryIndex));
+
+    tools.append(upButton, downButton, copyButton, removeButton);
+    item.append(select, tools);
+    return item;
+  }));
+  markActivePlaylistEntry();
+}
+
+function makePlaylistButton(label: string, disabled: boolean, onClick: () => void) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'mini-button';
+  button.textContent = label;
+  button.disabled = disabled;
+  button.addEventListener('click', onClick);
+  return button;
+}
+
+function movePlaylistEntry(fromIndex: number, toIndex: number) {
+  if (toIndex < 0 || toIndex >= playlistPoseIndexes.length) return;
+  const [entry] = playlistPoseIndexes.splice(fromIndex, 1);
+  playlistPoseIndexes.splice(toIndex, 0, entry);
+  if (activePlaylistIndex === fromIndex) activePlaylistIndex = toIndex;
+  else if (fromIndex < activePlaylistIndex && toIndex >= activePlaylistIndex) activePlaylistIndex -= 1;
+  else if (fromIndex > activePlaylistIndex && toIndex <= activePlaylistIndex) activePlaylistIndex += 1;
+  renderPlaylist();
+}
+
+function duplicatePlaylistEntry(entryIndex: number) {
+  playlistPoseIndexes.splice(entryIndex + 1, 0, playlistPoseIndexes[entryIndex]);
+  if (activePlaylistIndex > entryIndex) activePlaylistIndex += 1;
+  renderPlaylist();
+}
+
+function removePlaylistEntry(entryIndex: number) {
+  if (playlistPoseIndexes.length <= 1) return;
+  playlistPoseIndexes.splice(entryIndex, 1);
+  if (activePlaylistIndex === entryIndex) {
+    activePlaylistIndex = Math.min(entryIndex, playlistPoseIndexes.length - 1);
+    renderPlaylist();
+    choosePlaylistEntry(activePlaylistIndex, true, true);
+    return;
+  }
+  if (activePlaylistIndex > entryIndex) activePlaylistIndex -= 1;
+  renderPlaylist();
+}
+
+function resetPlaylistToAllPoses() {
+  playlistPoseIndexes = POSES.map((_, i) => i);
+  activePlaylistIndex = Math.min(activePoseIndex, playlistPoseIndexes.length - 1);
+  renderPlaylist();
+}
+
+function startPlaylistWithSelectedPose() {
+  playlistPoseIndexes = [Number(poseSelect.value)];
+  activePlaylistIndex = 0;
+  renderPlaylist();
+  choosePlaylistEntry(0, true, true);
+}
+
+function addSelectedPoseToPlaylist() {
+  playlistPoseIndexes.push(Number(poseSelect.value));
+  activePlaylistIndex = playlistPoseIndexes.length - 1;
+  renderPlaylist();
+  choosePlaylistEntry(activePlaylistIndex, true, true);
 }
 
 function disposeObject(root: THREE.Object3D) {
@@ -846,11 +961,22 @@ function syncPoseSelectToActive() {
   poseSelect.value = String(activePoseIndex);
 }
 
-function choosePose(index: number, keepTransition = true, syncSelect = true) {
+function syncPlaylistToActivePose() {
+  if (playlistPoseIndexes[activePlaylistIndex] === activePoseIndex) {
+    markActivePlaylistEntry();
+    return;
+  }
+  const matchingIndex = playlistPoseIndexes.findIndex(index => index === activePoseIndex);
+  if (matchingIndex >= 0) activePlaylistIndex = matchingIndex;
+  markActivePlaylistEntry();
+}
+
+function choosePose(index: number, keepTransition = true, syncSelect = true, syncPlaylist = true) {
   if (!rig) return;
   previousPoseIndex = activePoseIndex;
   activePoseIndex = ((index % POSES.length) + POSES.length) % POSES.length;
   if (syncSelect) syncPoseSelectToActive();
+  if (syncPlaylist) syncPlaylistToActivePose();
   // The transition blend only advances while playing (transitionElapsed is
   // frozen when paused), so keeping a transition while paused would leave mix
   // stuck at 0 and render the PREVIOUS pose, one behind the selection. When
@@ -861,6 +987,20 @@ function choosePose(index: number, keepTransition = true, syncSelect = true) {
   poseElapsed = 0;
   holdElapsed = 0;
   transitionElapsed = 0;
+}
+
+function choosePlaylistEntry(entryIndex: number, keepTransition = true, syncSelect = true) {
+  if (playlistPoseIndexes.length === 0) return;
+  activePlaylistIndex = ((entryIndex % playlistPoseIndexes.length) + playlistPoseIndexes.length) % playlistPoseIndexes.length;
+  choosePose(playlistPoseIndexes[activePlaylistIndex], keepTransition, syncSelect, false);
+  markActivePlaylistEntry();
+}
+
+function getNextPlaylistIndex() {
+  if (playlistPoseIndexes.length === 0) return activePlaylistIndex;
+  if (repeatToggle.checked) return activePlaylistIndex;
+  if (playlistPoseIndexes[activePlaylistIndex] !== activePoseIndex) return 0;
+  return (activePlaylistIndex + 1) % playlistPoseIndexes.length;
 }
 
 function loadLevel(index: number) {
@@ -877,8 +1017,7 @@ function update(dt: number) {
     else holdElapsed += dt;
 
     if (holdElapsed >= pose.hold) {
-      const next = repeatToggle.checked ? activePoseIndex : activePoseIndex + 1;
-      choosePose(next, true, !isPoseSelectInteracting());
+      choosePlaylistEntry(getNextPlaylistIndex(), true, !isPoseSelectInteracting());
     }
   }
 
@@ -991,6 +1130,9 @@ poseSelect.addEventListener('change', () => {
   withLoading(() => choosePose(Number(poseSelect.value), true, true));
 });
 levelSelect.addEventListener('change', () => withLoading(() => loadLevel(Number(levelSelect.value))));
+playlistAddButton.addEventListener('click', addSelectedPoseToPlaylist);
+playlistStartButton.addEventListener('click', startPlaylistWithSelectedPose);
+playlistResetButton.addEventListener('click', resetPlaylistToAllPoses);
 panelHandle.addEventListener('click', handlePanelClick);
 controlPanel.addEventListener('pointerdown', beginPanelGesture);
 controlPanel.addEventListener('pointerup', finishPanelGesture);
