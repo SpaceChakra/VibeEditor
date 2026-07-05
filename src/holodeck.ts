@@ -36,6 +36,8 @@ const levelSelect = document.getElementById('levelSelect') as HTMLSelectElement;
 const pauseToggle = document.getElementById('pauseToggle') as HTMLInputElement;
 const repeatToggle = document.getElementById('repeatToggle') as HTMLInputElement;
 const poseStatus = document.getElementById('poseStatus') as HTMLDivElement;
+const controlPanel = document.getElementById('controlPanel') as HTMLDivElement;
+const panelHandle = document.getElementById('panelHandle') as HTMLButtonElement;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -82,6 +84,9 @@ let holdElapsed = 0;
 let transitionElapsed = 0;
 let transitionFromMap: PoseMap | null = null;
 let lastTime = performance.now();
+let panelPointerY = 0;
+let panelPointerActive = false;
+let suppressPanelClick = false;
 
 const POSES: PoseDef[] = [
   {
@@ -364,9 +369,49 @@ function update(dt: number) {
 function resize() {
   const w = stageEl.clientWidth;
   const h = stageEl.clientHeight;
+  const mobile = w <= 760;
+  camera.position.set(0, mobile ? 2.65 : 2.45, mobile ? 8.8 : 7.2);
+  controls.target.set(0, mobile ? 1.55 : 1.35, -0.25);
   renderer.setSize(w, h);
   camera.aspect = w / Math.max(1, h);
   camera.updateProjectionMatrix();
+}
+
+function setPanelCollapsed(collapsed: boolean) {
+  controlPanel.classList.toggle('is-collapsed', collapsed);
+  controlPanel.classList.toggle('is-open', !collapsed);
+  panelHandle.setAttribute('aria-expanded', String(!collapsed));
+  panelHandle.setAttribute('aria-label', collapsed ? 'Open controls' : 'Collapse controls');
+}
+
+function togglePanel() {
+  setPanelCollapsed(!controlPanel.classList.contains('is-collapsed'));
+}
+
+function beginPanelGesture(event: PointerEvent) {
+  const rect = controlPanel.getBoundingClientRect();
+  if (event.clientY > rect.top + 56) return;
+  panelPointerY = event.clientY;
+  panelPointerActive = true;
+  controlPanel.setPointerCapture(event.pointerId);
+}
+
+function finishPanelGesture(event: PointerEvent) {
+  if (!panelPointerActive) return;
+  const delta = event.clientY - panelPointerY;
+  panelPointerActive = false;
+  controlPanel.releasePointerCapture(event.pointerId);
+  suppressPanelClick = true;
+  if (Math.abs(delta) >= 18) setPanelCollapsed(delta > 0);
+  else togglePanel();
+}
+
+function handlePanelClick() {
+  if (suppressPanelClick) {
+    suppressPanelClick = false;
+    return;
+  }
+  togglePanel();
 }
 
 function frame(now: number) {
@@ -388,4 +433,8 @@ window.addEventListener('resize', resize);
 characterSelect.addEventListener('change', () => loadCharacter(Number(characterSelect.value)));
 poseSelect.addEventListener('change', () => choosePose(Number(poseSelect.value)));
 levelSelect.addEventListener('change', () => loadLevel(Number(levelSelect.value)));
+panelHandle.addEventListener('click', handlePanelClick);
+controlPanel.addEventListener('pointerdown', beginPanelGesture);
+controlPanel.addEventListener('pointerup', finishPanelGesture);
+controlPanel.addEventListener('pointercancel', () => { panelPointerActive = false; });
 requestAnimationFrame(frame);
