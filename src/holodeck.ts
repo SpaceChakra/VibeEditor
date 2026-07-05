@@ -101,6 +101,7 @@ let panelPointerY = 0;
 let panelPointerActive = false;
 let suppressPanelClick = false;
 let loadingHideTimer = 0;
+let poseSelectInteracting = false;
 
 const SHOWCASE_POSES: PoseDef[] = [
   {
@@ -835,11 +836,19 @@ function applyPose(toMap: PoseMap, fromMap: PoseMap | null, mix: number) {
   }
 }
 
-function choosePose(index: number, keepTransition = true) {
+function isPoseSelectInteracting() {
+  return poseSelectInteracting || document.activeElement === poseSelect;
+}
+
+function syncPoseSelectToActive() {
+  poseSelect.value = String(activePoseIndex);
+}
+
+function choosePose(index: number, keepTransition = true, syncSelect = true) {
   if (!rig) return;
   previousPoseIndex = activePoseIndex;
   activePoseIndex = ((index % POSES.length) + POSES.length) % POSES.length;
-  poseSelect.value = String(activePoseIndex);
+  if (syncSelect) syncPoseSelectToActive();
   transitionFromMap = keepTransition
     ? POSES[previousPoseIndex].sample(Math.min(1, poseElapsed / POSES[previousPoseIndex].duration), rig.profile.scale, baseState)
     : null;
@@ -863,7 +872,7 @@ function update(dt: number) {
 
     if (holdElapsed >= pose.hold) {
       const next = repeatToggle.checked ? activePoseIndex : activePoseIndex + 1;
-      choosePose(next);
+      choosePose(next, true, !isPoseSelectInteracting());
     }
   }
 
@@ -947,7 +956,17 @@ withLoading(() => {
 });
 window.addEventListener('resize', resize);
 characterSelect.addEventListener('change', () => withLoading(() => loadCharacter(Number(characterSelect.value))));
-poseSelect.addEventListener('change', () => withLoading(() => choosePose(Number(poseSelect.value))));
+poseSelect.addEventListener('pointerdown', () => { poseSelectInteracting = true; });
+poseSelect.addEventListener('focus', () => { poseSelectInteracting = true; });
+poseSelect.addEventListener('keydown', () => { poseSelectInteracting = true; });
+poseSelect.addEventListener('blur', () => {
+  poseSelectInteracting = false;
+  syncPoseSelectToActive();
+});
+poseSelect.addEventListener('change', () => {
+  poseSelectInteracting = false;
+  withLoading(() => choosePose(Number(poseSelect.value), true, true));
+});
 levelSelect.addEventListener('change', () => withLoading(() => loadLevel(Number(levelSelect.value))));
 panelHandle.addEventListener('click', handlePanelClick);
 controlPanel.addEventListener('pointerdown', beginPanelGesture);
