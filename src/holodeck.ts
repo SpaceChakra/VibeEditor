@@ -44,7 +44,6 @@ const characterSelect = document.getElementById('characterSelect') as HTMLSelect
 const poseSelect = document.getElementById('poseSelect') as HTMLSelectElement;
 const levelSelect = document.getElementById('levelSelect') as HTMLSelectElement;
 const pauseToggle = document.getElementById('pauseToggle') as HTMLButtonElement;
-const poseStatus = document.getElementById('poseStatus') as HTMLDivElement;
 const controlPanel = document.getElementById('controlPanel') as HTMLDivElement;
 const panelHandle = document.getElementById('panelHandle') as HTMLButtonElement;
 const loadingSpinner = document.getElementById('loadingSpinner') as HTMLDivElement;
@@ -1126,6 +1125,8 @@ function isPoseSelectInteracting() {
 
 function syncPoseSelectToActive() {
   poseSelect.value = String(activePoseIndex);
+  poseSelect.title = POSES[activePoseIndex]?.label || 'Animation / Pose';
+  poseSelect.setAttribute('aria-label', animationPaused ? 'Animation / Pose paused' : 'Animation / Pose');
 }
 
 function syncPlaylistToActivePose() {
@@ -1200,8 +1201,8 @@ function update(dt: number) {
   if (mix >= 1) transitionFromMap = null;
   keepCharacterOnSurface();
 
-  const label = `${CHARACTER_OPTIONS[Number(characterSelect.value)]?.label || 'Character'} - ${pose.label}`;
-  poseStatus.textContent = animationPaused ? `${label} (paused)` : label;
+  poseSelect.title = `${CHARACTER_OPTIONS[Number(characterSelect.value)]?.label || 'Character'} - ${pose.label}${animationPaused ? ' (paused)' : ''}`;
+  poseSelect.setAttribute('aria-label', animationPaused ? 'Animation / Pose paused' : 'Animation / Pose');
   rig.pets.forEach(pet => pet.update(performance.now() / 1000, rig!.mesh.position, rig!.mesh.rotation.y));
 }
 
