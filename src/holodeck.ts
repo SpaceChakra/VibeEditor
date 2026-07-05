@@ -99,7 +99,6 @@ let activePoseIndex = 0;
 let previousPoseIndex = 0;
 let poseElapsed = 0;
 let holdElapsed = 0;
-let transitionElapsed = 0;
 let transitionFromMap: PoseMap | null = null;
 let lastTime = performance.now();
 let panelPointerY = 0;
@@ -908,7 +907,6 @@ function loadCharacter(index: number) {
   baseState = captureBaseState(rig);
   poseElapsed = 0;
   holdElapsed = 0;
-  transitionElapsed = 0;
   transitionFromMap = null;
   applyPose(POSES[activePoseIndex].sample(0, rig.profile.scale, baseState), null, 1);
   keepCharacterOnSurface();
@@ -986,7 +984,6 @@ function choosePose(index: number, keepTransition = true, syncSelect = true, syn
     : null;
   poseElapsed = 0;
   holdElapsed = 0;
-  transitionElapsed = 0;
 }
 
 function choosePlaylistEntry(entryIndex: number, keepTransition = true, syncSelect = true) {
@@ -1011,20 +1008,20 @@ function loadLevel(index: number) {
 
 function update(dt: number) {
   if (!rig) return;
-  const pose = POSES[activePoseIndex];
+  let pose = POSES[activePoseIndex];
   if (!pauseToggle.checked) {
     if (poseElapsed < pose.duration) poseElapsed += dt;
     else holdElapsed += dt;
 
     if (holdElapsed >= pose.hold) {
       choosePlaylistEntry(getNextPlaylistIndex(), true, !isPoseSelectInteracting());
+      pose = POSES[activePoseIndex];
     }
   }
 
   const phase = Math.min(1, poseElapsed / pose.duration);
   const targetMap = pose.sample(phase, rig.profile.scale, baseState);
-  transitionElapsed += pauseToggle.checked ? 0 : dt;
-  const mix = transitionFromMap ? Math.min(1, transitionElapsed / 0.32) : 1;
+  const mix = transitionFromMap ? phase : 1;
   applyPose(targetMap, transitionFromMap, easeInOut(mix));
   if (mix >= 1) transitionFromMap = null;
   keepCharacterOnSurface();
