@@ -10,6 +10,6 @@ The current scope includes procedural character builders, part transforms, mater
 
 ## Screenshots
 
-![VibeEditor sample roster with knight, samurai, and pirate procedural models](docs/screenshots/character-roster.png)
-
 ![VibeEditor character editor showing the Randroid / Rusty sample model](docs/screenshots/character-editor.png)
+
+![VibeEditor sample level with Rusty, knight, samurai, and pirate posed together](docs/screenshots/sample-level-roster.png)
