@@ -42,7 +42,7 @@ const stageEl = document.getElementById('stage') as HTMLDivElement;
 const characterSelect = document.getElementById('characterSelect') as HTMLSelectElement;
 const poseSelect = document.getElementById('poseSelect') as HTMLSelectElement;
 const levelSelect = document.getElementById('levelSelect') as HTMLSelectElement;
-const pauseToggle = document.getElementById('pauseToggle') as HTMLInputElement;
+const pauseToggle = document.getElementById('pauseToggle') as HTMLButtonElement;
 const poseStatus = document.getElementById('poseStatus') as HTMLDivElement;
 const controlPanel = document.getElementById('controlPanel') as HTMLDivElement;
 const panelHandle = document.getElementById('panelHandle') as HTMLButtonElement;
@@ -108,6 +108,10 @@ let loadingHideTimer = 0;
 let poseSelectInteracting = false;
 let playlistPoseIndexes: number[] = [];
 let activePlaylistIndex = 0;
+let animationPaused = false;
+
+const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z"></path></svg>';
+const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>';
 
 const SHOWCASE_POSES: PoseDef[] = [
   {
@@ -839,6 +843,18 @@ function addSelectedPoseToPlaylist() {
   choosePlaylistEntry(activePlaylistIndex, true, true);
 }
 
+function syncPauseButton() {
+  pauseToggle.innerHTML = animationPaused ? PLAY_ICON : PAUSE_ICON;
+  pauseToggle.setAttribute('aria-label', animationPaused ? 'Play animation' : 'Pause animation');
+  pauseToggle.setAttribute('aria-pressed', String(animationPaused));
+  pauseToggle.title = animationPaused ? 'Play animation' : 'Pause animation';
+}
+
+function toggleAnimationPaused() {
+  animationPaused = !animationPaused;
+  syncPauseButton();
+}
+
 function disposeObject(root: THREE.Object3D) {
   root.traverse(obj => {
     if (obj instanceof THREE.Mesh) {
@@ -978,7 +994,7 @@ function choosePose(index: number, keepTransition = true, syncSelect = true, syn
   // frozen when paused), so keeping a transition while paused would leave mix
   // stuck at 0 and render the PREVIOUS pose, one behind the selection. When
   // paused, snap straight to the chosen pose instead.
-  transitionFromMap = keepTransition && !pauseToggle.checked
+  transitionFromMap = keepTransition && !animationPaused
     ? POSES[previousPoseIndex].sample(Math.min(1, poseElapsed / POSES[previousPoseIndex].duration), rig.profile.scale, baseState)
     : null;
   poseElapsed = 0;
@@ -1007,7 +1023,7 @@ function loadLevel(index: number) {
 function update(dt: number) {
   if (!rig) return;
   let pose = POSES[activePoseIndex];
-  if (!pauseToggle.checked) {
+  if (!animationPaused) {
     if (poseElapsed < pose.duration) poseElapsed += dt;
     else holdElapsed += dt;
 
@@ -1025,7 +1041,7 @@ function update(dt: number) {
   keepCharacterOnSurface();
 
   const label = `${CHARACTER_OPTIONS[Number(characterSelect.value)]?.label || 'Character'} - ${pose.label}`;
-  poseStatus.textContent = pauseToggle.checked ? `${label} (paused)` : label;
+  poseStatus.textContent = animationPaused ? `${label} (paused)` : label;
   rig.pets.forEach(pet => pet.update(performance.now() / 1000, rig!.mesh.position, rig!.mesh.rotation.y));
 }
 
@@ -1106,6 +1122,7 @@ function frame(now: number) {
 
 withLoading(() => {
   populateControls();
+  syncPauseButton();
   loadLevel(0);
   loadCharacter(0);
   choosePose(0, false);
@@ -1125,6 +1142,7 @@ poseSelect.addEventListener('change', () => {
   withLoading(() => choosePose(Number(poseSelect.value), true, true));
 });
 levelSelect.addEventListener('change', () => withLoading(() => loadLevel(Number(levelSelect.value))));
+pauseToggle.addEventListener('click', toggleAnimationPaused);
 playlistAddButton.addEventListener('click', addSelectedPoseToPlaylist);
 playlistStartButton.addEventListener('click', startPlaylistWithSelectedPose);
 playlistResetButton.addEventListener('click', resetPlaylistToAllPoses);
