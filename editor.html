@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VibeEditor</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #15171c; font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace; color: #d8dce3; }
+    #app { display: flex; height: 100vh; }
+    #view { flex: 1; position: relative; }
+    #view canvas { display: block; }
+    #hint { position: absolute; left: 12px; top: 10px; font-size: 11px; color: #8a93a3; pointer-events: none; line-height: 1.5; }
+    #panel { width: 340px; background: #1b1e25; border-left: 1px solid #2c313c; display: flex; flex-direction: column; }
+    #panel h1 { font-size: 13px; margin: 0; padding: 12px 14px; background: #232732; border-bottom: 1px solid #2c313c; color: #f0c987; letter-spacing: .5px; }
+    .scroll { overflow-y: auto; padding: 12px 14px; flex: 1; }
+    label { display: block; font-size: 11px; color: #9aa3b2; margin: 10px 0 3px; }
+    select, input[type=number] { width: 100%; background: #11131a; color: #e6eaf0; border: 1px solid #333a47; border-radius: 5px; padding: 6px 8px; font-family: inherit; font-size: 12px; }
+    .row { display: grid; grid-template-columns: 22px 1fr 64px; align-items: center; gap: 8px; margin: 7px 0; }
+    .row span.axis { font-size: 12px; color: #c9d2e0; font-weight: bold; text-align: center; }
+    input[type=range] { width: 100%; accent-color: #f0c987; }
+    input.num { width: 64px; background: #11131a; color: #e6eaf0; border: 1px solid #333a47; border-radius: 4px; padding: 3px 5px; font-size: 11px; font-family: inherit; }
+    .group { border: 1px solid #2c313c; border-radius: 7px; padding: 8px 10px 10px; margin: 12px 0; }
+    .group > .title { font-size: 11px; color: #f0c987; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; display: flex; align-items: center; justify-content: space-between; }
+    .lock-btn { font-size: 13px; background: none; border: none; padding: 0 2px; cursor: pointer; opacity: 0.4; line-height: 1; flex: none; color: #f0c987; }
+    .lock-btn.locked { opacity: 1; }
+    .check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #cdd4e0; margin: 8px 0; cursor: pointer; }
+    .check input { accent-color: #f0c987; width: 15px; height: 15px; }
+    .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    button { flex: 1; background: #2a3140; color: #e6eaf0; border: 1px solid #3a4252; border-radius: 6px; padding: 9px 8px; font-family: inherit; font-size: 12px; cursor: pointer; }
+    button:hover { background: #343d4f; }
+    button.primary { background: #6b531f; border-color: #8a6c2a; color: #fbe6b8; }
+    button.primary:hover { background: #7d6125; }
+    button.active { background: #2f6d3a; border-color: #46a256; color: #e8ffe9; }
+    button.active:hover { background: #357a42; }
+    #export { width: 100%; height: 180px; background: #0d0f14; color: #b9e6c0; border: 1px solid #333a47; border-radius: 6px; padding: 8px; font-size: 11px; font-family: inherit; white-space: pre; overflow: auto; margin-top: 8px; }
+    .muted { font-size: 10px; color: #6c7686; line-height: 1.4; margin-top: 4px; }
+    .muted code { color: #f0c987; }
+    #tabs { display: flex; border-bottom: 1px solid #2c313c; }
+    .tab { flex: 1; background: #1b1e25; color: #8a93a3; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 0; font-size: 12px; font-family: inherit; letter-spacing: .5px; cursor: pointer; }
+    .tab:hover { color: #cdd4e0; background: #1f2330; }
+    .tab.active { color: #f0c987; border-bottom-color: #f0c987; background: #1b1e25; }
+    .light-row { display:flex; align-items:center; gap:8px; margin:7px 0; }
+    .light-row span { font-size:11px; color:#9aa3b2; width:44px; flex-shrink:0; }
+    .light-row input[type=range] { flex:1; }
+    .light-row input.num { width:52px; }
+    .color-row { display:flex; align-items:center; gap:8px; margin:7px 0; }
+    .color-row span { font-size:11px; color:#9aa3b2; flex:1; }
+    .color-row input[type=color] { width:40px; height:26px; border:1px solid #333a47; border-radius:4px; background:#11131a; cursor:pointer; padding:2px 3px; }
+    #lvlInfo { font-size:11px; color:#6c7686; margin:10px 0 6px; padding:8px 10px; background:#11131a; border:1px solid #2c313c; border-radius:5px; line-height:1.5; }
+    #lvlInfo.has-sel { color:#c9d2e0; border-color:#3a4a5c; }
+    .lvl-export { width:100%; height:200px; background:#0d0f14; color:#b9e6c0; border:1px solid #333a47; border-radius:6px; padding:8px; font-size:11px; font-family:inherit; white-space:pre; overflow:auto; margin-top:8px; display:block; }
+    .grp-disabled { opacity:0.38; pointer-events:none; }
+    .uv-rot-btn { font-size:11px; padding:2px 7px; background:#1a1d26; border:1px solid #333a47; color:#9aa3b2; border-radius:4px; cursor:pointer; }
+    .uv-rot-btn.active { background:#2a4a7a; border-color:#4a7acc; color:#e6eaf0; }
+    #toast { position:fixed; top:16px; left:50%; transform:translateX(-50%); background:#2f6d3a; color:#e8ffe9; border:1px solid #46a256; border-radius:8px; padding:9px 18px; font-size:12px; pointer-events:none; opacity:0; transition:opacity 0.2s; z-index:9999; white-space:nowrap; }
+    #toast.show { opacity:1; }
+    @media (max-width: 720px) {
+      html, body { overflow: hidden; }
+      #app { flex-direction: column; width: 100vw; height: 100vh; overflow: hidden; }
+      #view { flex: 0 0 44vh; width: 100vw; min-width: 0; min-height: 260px; }
+      #view canvas { width: 100% !important; height: 100% !important; }
+      #panel { width: 100vw; min-width: 0; flex: 1 1 auto; border-left: 0; border-top: 1px solid #2c313c; overflow: hidden; }
+      .scroll { min-height: 0; }
+      #hint { max-width: calc(100vw - 24px); }
+      #toast { max-width: calc(100vw - 24px); white-space: normal; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toast"></div>
+  <div id="app">
+    <div id="view">
+      <div id="hint">drag = orbit · scroll = zoom · right-drag = pan<br>click a part = select · Ctrl+Z = undo step</div>
+    </div>
+    <div id="panel">
+      <h1>VIBEEDITOR</h1>
+      <div id="tabs">
+        <button class="tab active" id="tabModel">CHARACTER</button>
+        <button class="tab" id="tabLight">LIGHTING</button>
+        <button class="tab" id="tabLevel">LEVEL</button>
+      </div>
+      <div class="scroll" id="modelPanel">
+        <label>Character</label>
+        <select id="character"></select>
+
+        <label>Color variant</label>
+        <select id="colorVariant">
+          <option value="0">Default</option>
+          <option value="1">Alt 1 (mid attack)</option>
+          <option value="2">Alt 2 (high attack)</option>
+        </select>
+
+        <label>Body part</label>
+        <select id="part"></select>
+
+        <label class="check"><input type="checkbox" id="moveHierarchy" checked /> Move hierarchy (children follow)</label>
+        <label class="check"><input type="checkbox" id="mirror" /> Mirror to opposite side</label>
+
+        <div id="charSubTabs" style="display:flex;gap:6px;margin:10px 0 4px">
+          <button class="tab active" id="charTabModel">MODEL</button>
+          <button class="tab" id="charTabTexture">TEXTURE</button>
+        </div>
+
+        <div id="charModelSubPanel">
+          <div class="group">
+            <div class="title"><span>Position (× s)</span><button class="lock-btn" id="lockPos" title="Lock XYZ together">🔓</button></div>
+            <div id="posRows"></div>
+          </div>
+          <div class="group">
+            <div class="title"><span>Rotation (radians)</span><button class="lock-btn" id="lockRot" title="Lock XYZ together">🔓</button></div>
+            <div id="rotRows"></div>
+          </div>
+          <div class="group">
+            <div class="title"><span>Scale</span><button class="lock-btn" id="lockScl" title="Lock XYZ together">🔓</button></div>
+            <div id="sclRows"></div>
+          </div>
+          <div class="group">
+            <div class="title"><span>Taper (XZ scale at each end)</span></div>
+            <div id="taperRows"></div>
+          </div>
+
+          <div class="btns">
+            <button id="resetPart">Reset part</button>
+            <button id="resetAll">Reset all</button>
+            <button id="breathe">Idle breathing</button>
+          </div>
+          <div class="btns" style="margin-top:8px">
+            <button id="dupPart">Duplicate part</button>
+          </div>
+          <div class="btns" style="margin-top:8px">
+            <button class="primary" id="genExport">Generate code</button>
+            <button id="copyExport">Copy</button>
+          </div>
+          <label class="check" style="margin:6px 0 2px"><input type="checkbox" id="autoApply" /> Auto-apply to source (writes the builder .ts via dev server)</label>
+          <div class="muted" style="margin-bottom:4px">Auto-apply inserts a marked block (easy to review/git-diff). Re-generate to refresh. Levels write a sidecar.</div>
+          <textarea id="export" readonly placeholder="Edited parts will appear here as paste-ready code…"></textarea>
+          <div class="muted">With the Auto-apply checkbox checked, Generate also writes a marked edit block into the matching *Builder.ts (review with git diff; safe to remove later). Position values are divided by <code>s</code> to match the source style. You can still copy/paste the textarea manually.</div>
+
+          <div style="margin:6px 0 2px">
+            <button id="checkBuilderBtn" style="font-size:11px;padding:3px 8px">Check live builder overrides (current *Builder.ts)</button>
+            <span id="builderCheckInfo" style="font-size:10px;color:#8a93a3;margin-left:6px"></span>
+          </div>
+          <textarea id="builderSrc" readonly style="height:70px;margin-top:2px;background:#0d0f14;color:#b9e6c0;border:1px solid #333a47;border-radius:4px;padding:4px;font-size:9px;font-family:inherit;width:100%;white-space:pre;overflow:auto;display:none"></textarea>
+
+          <div class="group" style="margin-top:16px">
+            <div class="title">Keyframe / Pose Preview</div>
+            <label>Animation pose</label>
+            <select id="animSel"></select>
+            <div class="btns" style="margin-top:8px">
+              <button id="previewAnim">Preview</button>
+              <button id="loadPose">Load → Sliders</button>
+            </div>
+            <div class="muted" style="margin-top:4px">Preview = non-destructive (like Idle breathing). Load = captures pose into sliders so you can tweak and export.</div>
+            <div class="btns" style="margin-top:8px">
+              <button class="primary" id="genAnimExport">Export anim code</button>
+              <button id="copyAnimExport">Copy anim</button>
+            </div>
+            <textarea id="animExport" readonly placeholder="Exported pose code appears here…" style="height:140px;margin-top:8px;background:#0d0f14;color:#b9e6c0;border:1px solid #333a47;border-radius:6px;padding:8px;font-size:11px;font-family:inherit;width:100%;white-space:pre;overflow:auto;display:block"></textarea>
+            <div class="muted">Bones that differ from idle defaults are emitted.</div>
+
+            <div style="margin-top:12px;border-top:1px solid #2c313c;padding-top:8px">
+              <div class="btns">
+                <button id="applyPoseBtn">Apply to this pose</button>
+                <button id="undoPoseBtn">Undo pose apply</button>
+              </div>
+              <div class="btns" style="margin-top:4px">
+                <button id="copyPoseBtn">Copy pose</button>
+                <button id="pastePoseBtn" disabled>Paste to sliders</button>
+                <button id="pastePoseToOthersBtn" disabled>Paste to this (apply)</button>
+              </div>
+              <div class="muted" style="margin-top:4px">Apply / Paste-to-this: update the pose's definition in src/editor.ts ANIM_POSES (marked block + backup for undo). Respects Auto-apply checkbox (off = prepare snippet only). Copy/paste transfers the current pose shape across different *animation entries for the same warrior*. Pose clipboard is cleared automatically when you switch Character (different models have incompatible scales, arm/neck offsets from profiles, hand/weapon grips, locked weaponGroup (Sample), armor children, builder baselines etc.). Re-copy after switching for correct results. After source change, reload /editor.html (or use sliders in this session).</div>
+
+              <div style="margin-top:10px; border-top:1px solid #2c313c; padding-top:8px">
+                <div class="title" style="font-size:10px;margin-bottom:4px">Runtime cross-check (launch / select pose)</div>
+                <div class="btns">
+                <button id="checkIngamePoseBtn">Check source pose</button>
+                  <button id="importIngameBtn" disabled>Import numbers → sliders</button>
+                </div>
+                <textarea id="ingamePoseSrc" readonly placeholder="Click 'Check source pose' to load a live source excerpt when a compatible runtime file exists." style="height:110px;margin-top:6px;background:#0d0f14;color:#b9e6c0;border:1px solid #333a47;border-radius:6px;padding:6px;font-size:10px;font-family:inherit;width:100%;white-space:pre;overflow:auto;display:block"></textarea>
+                <div class="muted" style="margin-top:2px">Snippet is read live from disk each time when available. Use Import to bring absolute sets (rotation.set / .x=) into current sliders/state for further editing.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="charTexSubPanel" style="display:none">
+          <label style="margin-top:6px">Mesh</label>
+          <select id="charMeshSel"></select>
+          <div style="display:flex;align-items:center;gap:8px;margin:4px 0 2px">
+            <label class="check" style="margin:0"><input type="checkbox" id="charGroupMode" checked /> Edit as group</label>
+            <span id="charGroupInfo" style="font-size:11px;color:#9aa3b2"></span>
+          </div>
+
+          <div class="group grp-disabled" id="charTexGrp">
+            <div class="title">Texture / Material</div>
+            <label>Texture set</label>
+            <select id="charTexSel"></select>
+
+            <div class="light-row" style="margin-top:8px">
+              <span>UV U</span>
+              <input type="range" id="charUVUSlider" min="0.1" max="20" step="0.1" value="4">
+              <input type="text" class="num" id="charUVUNum" value="4">
+            </div>
+            <div class="light-row">
+              <span>UV V</span>
+              <input type="range" id="charUVVSlider" min="0.1" max="20" step="0.1" value="4">
+              <input type="text" class="num" id="charUVVNum" value="4">
+            </div>
+            <div class="light-row">
+              <span>UV rot.</span>
+              <div id="charUVRotGrp" style="display:flex;gap:4px">
+                <button class="uv-rot-btn active" data-rot="0">0°</button>
+                <button class="uv-rot-btn" data-rot="1.5708">90°</button>
+                <button class="uv-rot-btn" data-rot="3.1416">180°</button>
+                <button class="uv-rot-btn" data-rot="4.7124">270°</button>
+              </div>
+            </div>
+            <div class="light-row">
+              <span>Norm. sc.</span>
+              <input type="range" id="charNormSlider" min="0" max="3" step="0.05" value="1">
+              <input type="text" class="num" id="charNormNum" value="1">
+            </div>
+            <div class="light-row">
+              <span>AO int.</span>
+              <input type="range" id="charAOSlider" min="0" max="2" step="0.05" value="1">
+              <input type="text" class="num" id="charAONum" value="1">
+            </div>
+            <div class="color-row" style="margin-top:6px">
+              <span>Color tint</span>
+              <input type="color" id="charColorPick" value="#ffffff">
+            </div>
+            <div class="light-row">
+              <span>Rough.</span>
+              <input type="range" id="charRoughSlider" min="0" max="1" step="0.01" value="0.8">
+              <input type="text" class="num" id="charRoughNum" value="0.8">
+            </div>
+            <div class="light-row">
+              <span>Metal.</span>
+              <input type="range" id="charMetalSlider" min="0" max="1" step="0.01" value="0">
+              <input type="text" class="num" id="charMetalNum" value="0">
+            </div>
+            <div class="color-row" style="margin-top:6px">
+              <span>Emissive</span>
+              <input type="color" id="charEmissivePick" value="#000000">
+            </div>
+            <div class="light-row">
+              <span>Em. int.</span>
+              <input type="range" id="charEmissiveSlider" min="0" max="5" step="0.1" value="0">
+              <input type="text" class="num" id="charEmissiveNum" value="0">
+            </div>
+            <div class="btns" style="margin-top:8px">
+              <button id="charTexCopy">Copy Texture</button>
+              <button id="charTexPaste" disabled>Paste Texture</button>
+            </div>
+          </div>
+
+          <div class="btns" style="margin-top:8px">
+            <button id="charTexUndo">Undo</button>
+            <button id="charTexRedo">Redo</button>
+            <button id="charTexRevert">Revert all</button>
+          </div>
+          <div class="btns" style="margin-top:8px; align-items:center">
+            <span class="muted" style="font-size:11px; white-space:nowrap">Scope:</span>
+            <button id="charScopeAll" class="active">All variants</button>
+            <button id="charScopeVariant">This variant</button>
+          </div>
+          <div class="btns" style="margin-top:4px">
+            <button class="primary" id="charGenTexExport">Generate export</button>
+            <button id="charCopyTexExport">Copy</button>
+          </div>
+          <textarea id="charTexExport" class="lvl-export" readonly placeholder="Select a mesh and apply textures, then generate export…"></textarea>
+          <div class="muted">Paste into the character's builder method. A <code>nthMesh()</code> helper is included in the output.</div>
+        </div>
+      </div>
+      <div class="scroll" id="lightingPanel" style="display:none"></div>
+
+      <div class="scroll" id="levelPanel" style="display:none">
+        <label>Level</label>
+        <select id="lvlSel"></select>
+
+        <div id="lvlInfo">Click a mesh in the viewport to select it</div>
+
+        <div class="group grp-disabled" id="lvlPosGrp">
+          <div class="title">Position</div>
+          <div id="lvlPosRows"></div>
+        </div>
+        <div class="group grp-disabled" id="lvlRotGrp">
+          <div class="title">Rotation (radians)</div>
+          <div id="lvlRotRows"></div>
+        </div>
+        <div class="group grp-disabled" id="lvlSclGrp">
+          <div class="title">Scale</div>
+          <div id="lvlSclRows"></div>
+        </div>
+
+        <div class="group grp-disabled" id="lvlTexGrp">
+          <div class="title">Texture / Material</div>
+          <div class="light-row" style="margin-bottom:8px">
+            <button id="lvlIsolate" title="Give this mesh its own material so texture/UV edits don't affect others that share it">Isolate this piece</button>
+            <span id="lvlShareInfo" style="font-size:11px;opacity:0.7"></span>
+          </div>
+          <label>Texture set</label>
+          <select id="lvlTexSel"></select>
+          <div class="light-row" style="margin-top:8px">
+            <span>UV U</span>
+            <input type="range" id="lvlUVUSlider" min="0.1" max="20" step="0.1" value="4">
+            <input type="text" class="num" id="lvlUVUNum" value="4">
+          </div>
+          <div class="light-row">
+            <span>UV V</span>
+            <input type="range" id="lvlUVVSlider" min="0.1" max="20" step="0.1" value="4">
+            <input type="text" class="num" id="lvlUVVNum" value="4">
+          </div>
+          <div class="light-row">
+            <span>UV rot.</span>
+            <div id="lvlUVRotGrp" style="display:flex;gap:4px;">
+              <button class="uv-rot-btn active" data-rot="0">0°</button>
+              <button class="uv-rot-btn" data-rot="1.5708">90°</button>
+              <button class="uv-rot-btn" data-rot="3.1416">180°</button>
+              <button class="uv-rot-btn" data-rot="4.7124">270°</button>
+            </div>
+          </div>
+          <div class="color-row" style="margin-top:6px">
+            <span>Color tint</span>
+            <input type="color" id="lvlColorPick" value="#ffffff">
+          </div>
+          <div class="light-row">
+            <span>Rough.</span>
+            <input type="range" id="lvlRoughSlider" min="0" max="1" step="0.01" value="0.8">
+            <input type="text" class="num" id="lvlRoughNum" value="0.8">
+          </div>
+          <div class="light-row">
+            <span>Metal.</span>
+            <input type="range" id="lvlMetalSlider" min="0" max="1" step="0.01" value="0">
+            <input type="text" class="num" id="lvlMetalNum" value="0">
+          </div>
+          <div class="color-row" style="margin-top:6px">
+            <span>Emissive</span>
+            <input type="color" id="lvlEmissivePick" value="#000000">
+          </div>
+          <div class="light-row">
+            <span>Em. int.</span>
+            <input type="range" id="lvlEmissiveSlider" min="0" max="5" step="0.1" value="0">
+            <input type="text" class="num" id="lvlEmissiveNum" value="0">
+          </div>
+          <div class="btns" style="margin-top:8px">
+            <button id="lvlTexCopy">Copy Texture</button>
+            <button id="lvlTexPaste" disabled>Paste Texture</button>
+          </div>
+        </div>
+
+        <div class="btns" style="margin-top:8px">
+          <button id="lvlDup">Duplicate object</button>
+          <button id="lvlUndo">Undo</button>
+          <button id="lvlRedo">Redo</button>
+        </div>
+        <div class="btns" style="margin-top:8px">
+          <button class="primary" id="lvlGenExport">Generate export</button>
+          <button id="lvlCopyExport">Copy</button>
+        </div>
+        <textarea id="lvlExport" class="lvl-export" readonly placeholder="Click Generate to see all changes as paste-ready code…"></textarea>
+        <div class="muted">Paste into the terminal and share with Claude to apply changes to EnvironmentManager.ts. With the Auto-apply checkbox on (CHARACTER tab), Generate will also attempt a best-effort write (levels fall back to a timestamped sidecar file because of local variables in the build code).</div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/src/editor.ts"></script>
+</body>
+</html>
