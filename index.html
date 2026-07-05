@@ -15,8 +15,8 @@
     #brand { padding: 10px 12px; background: rgba(20, 23, 30, 0.82); border: 1px solid rgba(240, 201, 135, 0.35); border-radius: 8px; backdrop-filter: blur(8px); pointer-events: auto; }
     #brand h1 { margin: 0 0 4px; font-size: 14px; color: #f0c987; letter-spacing: 0; }
     #poseStatus { font-size: 11px; color: #aab4c3; }
-    #controlPanel { --panel-handle-height: 38px; --panel-tab-height: 54px; position: absolute; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); max-height: min(34vh, 270px); background: rgba(20, 23, 30, 0.9); border: 1px solid rgba(122, 134, 156, 0.35); border-radius: 8px 8px 0 0; backdrop-filter: blur(10px); overflow: hidden; pointer-events: auto; transition: transform 180ms ease; }
-    #controlPanel.is-collapsed { transform: translateY(calc(100% - var(--panel-tab-height))); }
+    #controlPanel { --panel-handle-height: 38px; --panel-tab-height: 84px; position: absolute; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); max-height: min(34vh, 270px); background: rgba(20, 23, 30, 0.9); border: 1px solid rgba(122, 134, 156, 0.35); border-radius: 8px 8px 0 0; backdrop-filter: blur(10px); overflow: hidden; pointer-events: auto; transition: transform 180ms ease; }
+    #controlPanel.is-collapsed { box-shadow: 0 -10px 26px rgba(0, 0, 0, 0.32); transform: translateY(calc(100% - var(--panel-tab-height))); }
     #panelHandle { width: 100%; height: 38px; display: grid; place-items: center; border: 0; border-bottom: 1px solid rgba(122, 134, 156, 0.24); background: rgba(17, 19, 26, 0.72); color: #d8dce3; font: inherit; cursor: pointer; touch-action: none; }
     #controlPanel.is-collapsed #panelHandle { background: rgba(20, 23, 30, 0.96); }
     #panelHandle::before { content: ""; width: 54px; height: 4px; border-radius: 999px; background: #d8dce3; opacity: 0.78; }
@@ -33,7 +33,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 760px) {
       #hud { top: 14px; }
-      #controlPanel { --panel-handle-height: 36px; --panel-tab-height: 52px; left: 10px; right: 10px; bottom: max(8px, env(safe-area-inset-bottom)); max-height: min(31vh, 220px); }
+      #controlPanel { --panel-handle-height: 36px; --panel-tab-height: 96px; left: 10px; right: 10px; bottom: max(16px, env(safe-area-inset-bottom)); max-height: min(31vh, 220px); }
       #controlPanel.is-collapsed { transform: translateY(calc(100% - var(--panel-tab-height))); }
       #panelHandle { height: 36px; }
       #controls { grid-template-columns: 1fr; max-height: calc(min(31vh, 220px) - var(--panel-handle-height)); padding: 10px 14px max(12px, env(safe-area-inset-bottom)); }
