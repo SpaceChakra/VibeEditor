@@ -116,6 +116,7 @@ let suppressPanelClick = false;
 let panelState: PanelState = 'open';
 let loadingHideTimer = 0;
 let poseSelectInteracting = false;
+let poseSelectInteractionTimer = 0;
 let activePlaylistIndex = 0;
 let activePlaylistEntryIndex = 0;
 let editingPlaylistIndex = 0;
@@ -1123,6 +1124,19 @@ function isPoseSelectInteracting() {
   return poseSelectInteracting;
 }
 
+function beginPoseSelectInteraction() {
+  window.clearTimeout(poseSelectInteractionTimer);
+  poseSelectInteracting = true;
+  poseSelectInteractionTimer = window.setTimeout(() => {
+    poseSelectInteracting = false;
+  }, 900);
+}
+
+function endPoseSelectInteraction() {
+  window.clearTimeout(poseSelectInteractionTimer);
+  poseSelectInteracting = false;
+}
+
 function syncPoseSelectToActive() {
   poseSelect.value = String(activePoseIndex);
   poseSelect.title = POSES[activePoseIndex]?.label || 'Animation / Pose';
@@ -1291,14 +1305,14 @@ withLoading(() => {
 });
 window.addEventListener('resize', resize);
 characterSelect.addEventListener('change', () => withLoading(() => loadCharacter(Number(characterSelect.value))));
-poseSelect.addEventListener('pointerdown', () => { poseSelectInteracting = true; });
-poseSelect.addEventListener('keydown', () => { poseSelectInteracting = true; });
+poseSelect.addEventListener('pointerdown', beginPoseSelectInteraction);
+poseSelect.addEventListener('keydown', beginPoseSelectInteraction);
 poseSelect.addEventListener('blur', () => {
-  poseSelectInteracting = false;
+  endPoseSelectInteraction();
   syncPoseSelectToActive();
 });
 poseSelect.addEventListener('change', () => {
-  poseSelectInteracting = false;
+  endPoseSelectInteraction();
   withLoading(() => choosePose(Number(poseSelect.value), true, true));
 });
 levelSelect.addEventListener('change', () => withLoading(() => loadLevel(Number(levelSelect.value))));
