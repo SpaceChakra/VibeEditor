@@ -31,11 +31,30 @@
     .mini-button:disabled { color: #667082; cursor: not-allowed; opacity: 0.55; }
     .playlist-panel { grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px; background: rgba(17, 19, 26, 0.68); border: 1px solid #333a47; border-radius: 6px; }
     .playlist-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #9aa3b2; font-size: 10px; text-transform: uppercase; }
-    .playlist-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .playlist-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
     .playlist-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px; background: #11131a; border: 1px solid #333a47; border-radius: 6px; }
     .playlist-item.is-active { border-color: rgba(240, 201, 135, 0.78); box-shadow: inset 3px 0 0 #f0c987; }
+    .playlist-name-button { width: 100%; min-height: 34px; padding: 6px 8px; color: #e6eaf0; background: transparent; border: 0; text-align: left; cursor: pointer; }
+    .playlist-name-button span { display: block; font-size: 12px; }
+    .playlist-name-button small { display: block; margin-top: 2px; color: #7f8897; font-size: 10px; }
     .playlist-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .modal { position: absolute; inset: 0; z-index: 20; display: grid; background: rgba(10, 12, 17, 0.84); backdrop-filter: blur(10px); pointer-events: auto; }
+    .modal[hidden] { display: none; }
+    .modal-panel { width: 100%; height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; padding: max(18px, env(safe-area-inset-top)) 18px max(22px, env(safe-area-inset-bottom)); background: rgba(20, 23, 30, 0.96); }
+    .modal-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .modal-header h2 { margin: 0; color: #f0c987; font-size: 16px; letter-spacing: 0; }
+    #playlistNameInput { width: 100%; margin-top: 8px; padding: 9px 10px; color: #e6eaf0; background: #11131a; border: 1px solid #333a47; border-radius: 5px; font: inherit; font-size: 13px; }
+    .modal-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+    .modal-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 8px; margin: 0; padding: 0 0 92px; list-style: none; scrollbar-width: thin; }
+    .modal-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px; background: #11131a; border: 1px solid #333a47; border-radius: 6px; }
+    .modal-row.is-active { border-color: rgba(240, 201, 135, 0.78); box-shadow: inset 3px 0 0 #f0c987; }
+    .confirm-modal { place-items: center; padding: 18px; }
+    .confirm-box { width: min(420px, 100%); display: grid; gap: 14px; padding: 16px; background: rgba(20, 23, 30, 0.98); border: 1px solid rgba(240, 201, 135, 0.35); border-radius: 8px; }
+    .confirm-box h2 { margin: 0; color: #f0c987; font-size: 15px; }
+    .confirm-box p { margin: 0; color: #d8dce3; font-size: 12px; line-height: 1.45; }
+    .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .danger-button { border-color: rgba(255, 96, 96, 0.58); color: #ff9c9c; }
+    .danger-button:hover:not(:disabled), .danger-button:focus-visible:not(:disabled) { border-color: #ff9c9c; color: #ffd0d0; }
     #editorLink { display: inline-flex; align-items: center; min-height: 24px; color: #f0c987; text-decoration: none; font-size: 11px; }
     #editorLink:hover { text-decoration: underline; }
     #pauseToggle { position: absolute; right: 18px; top: 48px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; background: rgba(20, 23, 30, 0.86); color: #f0c987; border: 1px solid rgba(240, 201, 135, 0.42); border-radius: 999px; backdrop-filter: blur(8px); cursor: pointer; pointer-events: auto; transition: background 140ms ease, border-color 140ms ease, transform 140ms ease; }
@@ -53,6 +72,8 @@
       #controls { grid-template-columns: 1fr; height: calc(var(--panel-height) - var(--panel-handle-height)); padding: 10px 14px max(96px, calc(env(safe-area-inset-bottom) + 72px)); scroll-padding-bottom: 96px; }
       .playlist-header { align-items: flex-start; flex-direction: column; }
       .playlist-item { grid-template-columns: 1fr; }
+      .modal-toolbar { grid-template-columns: 1fr; }
+      .modal-row { grid-template-columns: 1fr; }
       .playlist-tools { justify-content: flex-start; }
       #brand { width: fit-content; max-width: 100%; }
     }
@@ -91,16 +112,42 @@
         </label>
         <section class="playlist-panel" aria-label="Animation playlist">
           <div class="playlist-header">
-            <span>Animation Playlist</span>
-            <button id="playlistAddButton" class="mini-button" type="button">Add selected</button>
-          </div>
-          <div class="playlist-actions">
-            <button id="playlistStartButton" class="mini-button" type="button">Start with selected</button>
-            <button id="playlistResetButton" class="mini-button" type="button">Reset all poses</button>
+            <span>Playlists</span>
+            <button id="playlistCreateButton" class="mini-button" type="button">New list</button>
           </div>
           <ol id="playlistList" class="playlist-list"></ol>
         </section>
       </div>
+    </div>
+    <div id="playlistModal" class="modal" hidden>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="playlistModalTitle">
+        <header class="modal-header">
+          <div>
+            <h2 id="playlistModalTitle">Edit Playlist</h2>
+            <input id="playlistNameInput" type="text" aria-label="Playlist name" />
+          </div>
+          <button id="playlistCloseButton" class="mini-button" type="button">Done</button>
+        </header>
+        <div class="modal-toolbar">
+          <label>
+            Add Pose
+            <select id="playlistPoseSelect"></select>
+          </label>
+          <button id="playlistModalAddButton" class="mini-button" type="button">Add pose</button>
+        </div>
+        <ol id="playlistPoseList" class="modal-list"></ol>
+        <button id="playlistDoneButton" class="mini-button" type="button">Done</button>
+      </section>
+    </div>
+    <div id="deleteConfirmModal" class="modal confirm-modal" hidden>
+      <section class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="deleteConfirmTitle">
+        <h2 id="deleteConfirmTitle">Delete playlist?</h2>
+        <p id="deleteConfirmText">This playlist will be removed.</p>
+        <div class="confirm-actions">
+          <button id="deleteCancelButton" class="mini-button" type="button">Cancel</button>
+          <button id="deleteConfirmButton" class="mini-button danger-button" type="button">Delete</button>
+        </div>
+      </section>
     </div>
   </div>
   <script type="module" src="/src/holodeck.ts"></script>

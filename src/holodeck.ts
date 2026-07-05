@@ -12,6 +12,7 @@ type BoneState = { pos: THREE.Vector3; rot: THREE.Euler; scl: THREE.Vector3 };
 type PoseOverride = { pos?: VecTuple; rot?: VecTuple; scl?: VecTuple };
 type PoseMap = Partial<Record<RigKey, PoseOverride>>;
 type PanelState = 'collapsed' | 'open' | 'expanded';
+type Playlist = { id: string; name: string; poseIndexes: number[]; locked?: boolean };
 type PoseDef = {
   id: string;
   label: string;
@@ -47,10 +48,20 @@ const poseStatus = document.getElementById('poseStatus') as HTMLDivElement;
 const controlPanel = document.getElementById('controlPanel') as HTMLDivElement;
 const panelHandle = document.getElementById('panelHandle') as HTMLButtonElement;
 const loadingSpinner = document.getElementById('loadingSpinner') as HTMLDivElement;
-const playlistAddButton = document.getElementById('playlistAddButton') as HTMLButtonElement;
-const playlistStartButton = document.getElementById('playlistStartButton') as HTMLButtonElement;
-const playlistResetButton = document.getElementById('playlistResetButton') as HTMLButtonElement;
+const playlistCreateButton = document.getElementById('playlistCreateButton') as HTMLButtonElement;
 const playlistList = document.getElementById('playlistList') as HTMLOListElement;
+const playlistModal = document.getElementById('playlistModal') as HTMLDivElement;
+const playlistModalTitle = document.getElementById('playlistModalTitle') as HTMLHeadingElement;
+const playlistNameInput = document.getElementById('playlistNameInput') as HTMLInputElement;
+const playlistPoseSelect = document.getElementById('playlistPoseSelect') as HTMLSelectElement;
+const playlistModalAddButton = document.getElementById('playlistModalAddButton') as HTMLButtonElement;
+const playlistPoseList = document.getElementById('playlistPoseList') as HTMLOListElement;
+const playlistCloseButton = document.getElementById('playlistCloseButton') as HTMLButtonElement;
+const playlistDoneButton = document.getElementById('playlistDoneButton') as HTMLButtonElement;
+const deleteConfirmModal = document.getElementById('deleteConfirmModal') as HTMLDivElement;
+const deleteConfirmText = document.getElementById('deleteConfirmText') as HTMLParagraphElement;
+const deleteCancelButton = document.getElementById('deleteCancelButton') as HTMLButtonElement;
+const deleteConfirmButton = document.getElementById('deleteConfirmButton') as HTMLButtonElement;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -106,9 +117,13 @@ let suppressPanelClick = false;
 let panelState: PanelState = 'open';
 let loadingHideTimer = 0;
 let poseSelectInteracting = false;
-let playlistPoseIndexes: number[] = [];
 let activePlaylistIndex = 0;
+let activePlaylistEntryIndex = 0;
+let editingPlaylistIndex = 0;
+let pendingDeletePlaylistIndex: number | null = null;
+let customPlaylistCounter = 1;
 let animationPaused = false;
+let playlists: Playlist[] = [];
 
 const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z"></path></svg>';
 const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>';
@@ -702,7 +717,7 @@ const POSES: PoseDef[] = [
   ...EDITOR_POSES,
 ];
 
-playlistPoseIndexes = POSES.map((_, i) => i);
+playlists = [{ id: 'all', name: 'All', poseIndexes: POSES.map((_, i) => i), locked: true }];
 
 function offsetPos(base: Partial<Record<RigKey, BoneState>>, key: RigKey, x: number, y: number, z: number): VecTuple {
   const pos = base[key]?.pos || new THREE.Vector3();
@@ -735,6 +750,7 @@ function populateControls() {
     return opt;
   }));
 
+  playlistPoseSelect.replaceChildren(...createPoseOptions(activePoseIndex));
   renderPlaylist();
 }
 
@@ -748,7 +764,20 @@ function createPoseOptions(selectedPoseIndex: number) {
   });
 }
 
-function markActivePlaylistEntry() {
+function getActivePlaylist() {
+  return playlists[activePlaylistIndex] || playlists[0];
+}
+
+function getEditingPlaylist() {
+  return playlists[editingPlaylistIndex] || getActivePlaylist();
+}
+
+function getPlaylistLabel(playlist: Playlist) {
+  const count = playlist.poseIndexes.length;
+  return `${count} ${count === 1 ? 'pose' : 'poses'}`;
+}
+
+function markActivePlaylist() {
   [...playlistList.children].forEach((child, i) => {
     child.classList.toggle('is-active', i === activePlaylistIndex);
     child.toggleAttribute('aria-current', i === activePlaylistIndex);
@@ -756,32 +785,30 @@ function markActivePlaylistEntry() {
 }
 
 function renderPlaylist() {
-  playlistList.replaceChildren(...playlistPoseIndexes.map((poseIndex, entryIndex) => {
+  playlistList.replaceChildren(...playlists.map((playlist, playlistIndex) => {
     const item = document.createElement('li');
     item.className = 'playlist-item';
 
-    const select = document.createElement('select');
-    select.className = 'playlist-pose-select';
-    select.setAttribute('aria-label', `Playlist slot ${entryIndex + 1}`);
-    select.replaceChildren(...createPoseOptions(poseIndex));
-    select.addEventListener('change', () => {
-      playlistPoseIndexes[entryIndex] = Number(select.value);
-      choosePlaylistEntry(entryIndex, true, true);
-    });
+    const nameButton = document.createElement('button');
+    nameButton.type = 'button';
+    nameButton.className = 'playlist-name-button';
+    nameButton.innerHTML = `<span></span><small></small>`;
+    nameButton.querySelector('span')!.textContent = playlist.name;
+    nameButton.querySelector('small')!.textContent = getPlaylistLabel(playlist);
+    nameButton.addEventListener('click', () => selectPlaylist(playlistIndex));
 
     const tools = document.createElement('div');
     tools.className = 'playlist-tools';
 
-    const upButton = makePlaylistButton('Up', entryIndex === 0, () => movePlaylistEntry(entryIndex, entryIndex - 1));
-    const downButton = makePlaylistButton('Down', entryIndex === playlistPoseIndexes.length - 1, () => movePlaylistEntry(entryIndex, entryIndex + 1));
-    const copyButton = makePlaylistButton('Copy', false, () => duplicatePlaylistEntry(entryIndex));
-    const removeButton = makePlaylistButton('Remove', playlistPoseIndexes.length <= 1, () => removePlaylistEntry(entryIndex));
+    const editButton = makePlaylistButton('Edit', false, () => openPlaylistEditor(playlistIndex));
+    const deleteButton = makePlaylistButton('Delete', Boolean(playlist.locked), () => openDeleteConfirm(playlistIndex));
+    if (playlist.locked) deleteButton.title = 'The default playlist cannot be deleted';
 
-    tools.append(upButton, downButton, copyButton, removeButton);
-    item.append(select, tools);
+    tools.append(editButton, deleteButton);
+    item.append(nameButton, tools);
     return item;
   }));
-  markActivePlaylistEntry();
+  markActivePlaylist();
 }
 
 function makePlaylistButton(label: string, disabled: boolean, onClick: () => void) {
@@ -794,53 +821,180 @@ function makePlaylistButton(label: string, disabled: boolean, onClick: () => voi
   return button;
 }
 
-function movePlaylistEntry(fromIndex: number, toIndex: number) {
-  if (toIndex < 0 || toIndex >= playlistPoseIndexes.length) return;
-  const [entry] = playlistPoseIndexes.splice(fromIndex, 1);
-  playlistPoseIndexes.splice(toIndex, 0, entry);
-  if (activePlaylistIndex === fromIndex) activePlaylistIndex = toIndex;
-  else if (fromIndex < activePlaylistIndex && toIndex >= activePlaylistIndex) activePlaylistIndex -= 1;
-  else if (fromIndex > activePlaylistIndex && toIndex <= activePlaylistIndex) activePlaylistIndex += 1;
+function selectPlaylist(playlistIndex: number) {
+  activePlaylistIndex = playlistIndex;
+  activePlaylistEntryIndex = Math.min(activePlaylistEntryIndex, Math.max(0, getActivePlaylist().poseIndexes.length - 1));
   renderPlaylist();
+  choosePlaylistEntry(activePlaylistEntryIndex, true, true);
 }
 
-function duplicatePlaylistEntry(entryIndex: number) {
-  playlistPoseIndexes.splice(entryIndex + 1, 0, playlistPoseIndexes[entryIndex]);
-  if (activePlaylistIndex > entryIndex) activePlaylistIndex += 1;
-  renderPlaylist();
-}
-
-function removePlaylistEntry(entryIndex: number) {
-  if (playlistPoseIndexes.length <= 1) return;
-  playlistPoseIndexes.splice(entryIndex, 1);
-  if (activePlaylistIndex === entryIndex) {
-    activePlaylistIndex = Math.min(entryIndex, playlistPoseIndexes.length - 1);
-    renderPlaylist();
-    choosePlaylistEntry(activePlaylistIndex, true, true);
-    return;
-  }
-  if (activePlaylistIndex > entryIndex) activePlaylistIndex -= 1;
-  renderPlaylist();
-}
-
-function resetPlaylistToAllPoses() {
-  playlistPoseIndexes = POSES.map((_, i) => i);
-  activePlaylistIndex = Math.min(activePoseIndex, playlistPoseIndexes.length - 1);
-  renderPlaylist();
-}
-
-function startPlaylistWithSelectedPose() {
-  playlistPoseIndexes = [Number(poseSelect.value)];
+function createPlaylist() {
+  const playlist: Playlist = {
+    id: `custom-${Date.now()}-${customPlaylistCounter}`,
+    name: `Playlist ${customPlaylistCounter}`,
+    poseIndexes: [activePoseIndex],
+  };
+  customPlaylistCounter += 1;
+  playlists.unshift(playlist);
   activePlaylistIndex = 0;
+  activePlaylistEntryIndex = 0;
+  editingPlaylistIndex = 0;
   renderPlaylist();
   choosePlaylistEntry(0, true, true);
+  openPlaylistEditor(0);
 }
 
-function addSelectedPoseToPlaylist() {
-  playlistPoseIndexes.push(Number(poseSelect.value));
-  activePlaylistIndex = playlistPoseIndexes.length - 1;
+function openPlaylistEditor(playlistIndex: number) {
+  editingPlaylistIndex = playlistIndex;
+  const playlist = getEditingPlaylist();
+  playlistModalTitle.textContent = `Edit ${playlist.name}`;
+  playlistNameInput.value = playlist.name;
+  playlistNameInput.disabled = Boolean(playlist.locked);
+  playlistPoseSelect.value = String(activePoseIndex);
+  playlistModal.hidden = false;
+  renderPlaylistEditor();
+  if (!playlist.locked) {
+    playlistNameInput.focus();
+    playlistNameInput.select();
+  }
+}
+
+function closePlaylistEditor() {
+  playlistModal.hidden = true;
+}
+
+function updateEditingPlaylistName() {
+  const playlist = getEditingPlaylist();
+  if (playlist.locked) return;
+  playlist.name = playlistNameInput.value.trim() || 'Untitled';
+  playlistModalTitle.textContent = `Edit ${playlist.name}`;
   renderPlaylist();
-  choosePlaylistEntry(activePlaylistIndex, true, true);
+}
+
+function renderPlaylistEditor() {
+  const playlist = getEditingPlaylist();
+  playlistPoseList.replaceChildren(...playlist.poseIndexes.map((poseIndex, entryIndex) => {
+    const item = document.createElement('li');
+    item.className = 'modal-row';
+    item.classList.toggle('is-active', editingPlaylistIndex === activePlaylistIndex && entryIndex === activePlaylistEntryIndex);
+
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', `Playlist slot ${entryIndex + 1}`);
+    select.replaceChildren(...createPoseOptions(poseIndex));
+    select.addEventListener('change', () => {
+      playlist.poseIndexes[entryIndex] = Number(select.value);
+      if (editingPlaylistIndex === activePlaylistIndex) choosePlaylistEntry(entryIndex, true, true);
+      renderPlaylist();
+      renderPlaylistEditor();
+    });
+
+    const tools = document.createElement('div');
+    tools.className = 'playlist-tools';
+    tools.append(
+      makePlaylistButton('Up', entryIndex === 0, () => movePlaylistPose(entryIndex, entryIndex - 1)),
+      makePlaylistButton('Down', entryIndex === playlist.poseIndexes.length - 1, () => movePlaylistPose(entryIndex, entryIndex + 1)),
+      makePlaylistButton('Copy', false, () => duplicatePlaylistPose(entryIndex)),
+      makePlaylistButton('Remove', playlist.poseIndexes.length <= 1, () => removePlaylistPose(entryIndex)),
+    );
+
+    item.append(select, tools);
+    return item;
+  }));
+}
+
+function markActivePlaylistEditorEntry() {
+  [...playlistPoseList.children].forEach((child, i) => {
+    child.classList.toggle('is-active', editingPlaylistIndex === activePlaylistIndex && i === activePlaylistEntryIndex);
+  });
+}
+
+function addPoseToEditingPlaylist() {
+  const playlist = getEditingPlaylist();
+  playlist.poseIndexes.push(Number(playlistPoseSelect.value));
+  if (editingPlaylistIndex === activePlaylistIndex) {
+    activePlaylistEntryIndex = playlist.poseIndexes.length - 1;
+    choosePlaylistEntry(activePlaylistEntryIndex, true, true);
+  }
+  renderPlaylist();
+  renderPlaylistEditor();
+}
+
+function movePlaylistPose(fromIndex: number, toIndex: number) {
+  const playlist = getEditingPlaylist();
+  if (toIndex < 0 || toIndex >= playlist.poseIndexes.length) return;
+  const [entry] = playlist.poseIndexes.splice(fromIndex, 1);
+  playlist.poseIndexes.splice(toIndex, 0, entry);
+  if (editingPlaylistIndex === activePlaylistIndex) {
+    if (activePlaylistEntryIndex === fromIndex) activePlaylistEntryIndex = toIndex;
+    else if (fromIndex < activePlaylistEntryIndex && toIndex >= activePlaylistEntryIndex) activePlaylistEntryIndex -= 1;
+    else if (fromIndex > activePlaylistEntryIndex && toIndex <= activePlaylistEntryIndex) activePlaylistEntryIndex += 1;
+  }
+  renderPlaylistEditor();
+}
+
+function duplicatePlaylistPose(entryIndex: number) {
+  const playlist = getEditingPlaylist();
+  playlist.poseIndexes.splice(entryIndex + 1, 0, playlist.poseIndexes[entryIndex]);
+  if (editingPlaylistIndex === activePlaylistIndex && activePlaylistEntryIndex > entryIndex) activePlaylistEntryIndex += 1;
+  renderPlaylist();
+  renderPlaylistEditor();
+}
+
+function removePlaylistPose(entryIndex: number) {
+  const playlist = getEditingPlaylist();
+  if (playlist.poseIndexes.length <= 1) return;
+  playlist.poseIndexes.splice(entryIndex, 1);
+  if (editingPlaylistIndex === activePlaylistIndex) {
+    if (activePlaylistEntryIndex === entryIndex) {
+      activePlaylistEntryIndex = Math.min(entryIndex, playlist.poseIndexes.length - 1);
+      choosePlaylistEntry(activePlaylistEntryIndex, true, true);
+    } else if (activePlaylistEntryIndex > entryIndex) {
+      activePlaylistEntryIndex -= 1;
+    }
+  }
+  renderPlaylist();
+  renderPlaylistEditor();
+}
+
+function openDeleteConfirm(playlistIndex: number) {
+  const playlist = playlists[playlistIndex];
+  if (!playlist || playlist.locked) return;
+  pendingDeletePlaylistIndex = playlistIndex;
+  deleteConfirmText.textContent = `Delete "${playlist.name}"? This cannot be undone.`;
+  deleteConfirmModal.hidden = false;
+  deleteCancelButton.focus();
+}
+
+function closeDeleteConfirm() {
+  pendingDeletePlaylistIndex = null;
+  deleteConfirmModal.hidden = true;
+}
+
+function confirmDeletePlaylist() {
+  if (pendingDeletePlaylistIndex == null) return;
+  const deleteIndex = pendingDeletePlaylistIndex;
+  const playlist = playlists[deleteIndex];
+  if (!playlist || playlist.locked) {
+    closeDeleteConfirm();
+    return;
+  }
+
+  playlists.splice(deleteIndex, 1);
+  if (playlists.length === 0) playlists.push({ id: 'all', name: 'All', poseIndexes: POSES.map((_, i) => i), locked: true });
+
+  if (editingPlaylistIndex === deleteIndex) closePlaylistEditor();
+  else if (editingPlaylistIndex > deleteIndex) editingPlaylistIndex -= 1;
+
+  if (activePlaylistIndex === deleteIndex) {
+    activePlaylistIndex = Math.min(deleteIndex, playlists.length - 1);
+    activePlaylistEntryIndex = 0;
+    choosePlaylistEntry(0, true, true);
+  } else if (activePlaylistIndex > deleteIndex) {
+    activePlaylistIndex -= 1;
+  }
+
+  closeDeleteConfirm();
+  renderPlaylist();
 }
 
 function syncPauseButton() {
@@ -975,13 +1129,16 @@ function syncPoseSelectToActive() {
 }
 
 function syncPlaylistToActivePose() {
-  if (playlistPoseIndexes[activePlaylistIndex] === activePoseIndex) {
-    markActivePlaylistEntry();
+  const playlist = getActivePlaylist();
+  if (playlist.poseIndexes[activePlaylistEntryIndex] === activePoseIndex) {
+    markActivePlaylist();
+    markActivePlaylistEditorEntry();
     return;
   }
-  const matchingIndex = playlistPoseIndexes.findIndex(index => index === activePoseIndex);
-  if (matchingIndex >= 0) activePlaylistIndex = matchingIndex;
-  markActivePlaylistEntry();
+  const matchingIndex = playlist.poseIndexes.findIndex(index => index === activePoseIndex);
+  if (matchingIndex >= 0) activePlaylistEntryIndex = matchingIndex;
+  markActivePlaylist();
+  markActivePlaylistEditorEntry();
 }
 
 function choosePose(index: number, keepTransition = true, syncSelect = true, syncPlaylist = true) {
@@ -1002,16 +1159,19 @@ function choosePose(index: number, keepTransition = true, syncSelect = true, syn
 }
 
 function choosePlaylistEntry(entryIndex: number, keepTransition = true, syncSelect = true) {
-  if (playlistPoseIndexes.length === 0) return;
-  activePlaylistIndex = ((entryIndex % playlistPoseIndexes.length) + playlistPoseIndexes.length) % playlistPoseIndexes.length;
-  choosePose(playlistPoseIndexes[activePlaylistIndex], keepTransition, syncSelect, false);
-  markActivePlaylistEntry();
+  const playlist = getActivePlaylist();
+  if (playlist.poseIndexes.length === 0) return;
+  activePlaylistEntryIndex = ((entryIndex % playlist.poseIndexes.length) + playlist.poseIndexes.length) % playlist.poseIndexes.length;
+  choosePose(playlist.poseIndexes[activePlaylistEntryIndex], keepTransition, syncSelect, false);
+  markActivePlaylist();
+  markActivePlaylistEditorEntry();
 }
 
 function getNextPlaylistIndex() {
-  if (playlistPoseIndexes.length === 0) return activePlaylistIndex;
-  if (playlistPoseIndexes[activePlaylistIndex] !== activePoseIndex) return 0;
-  return (activePlaylistIndex + 1) % playlistPoseIndexes.length;
+  const playlist = getActivePlaylist();
+  if (playlist.poseIndexes.length === 0) return activePlaylistEntryIndex;
+  if (playlist.poseIndexes[activePlaylistEntryIndex] !== activePoseIndex) return 0;
+  return (activePlaylistEntryIndex + 1) % playlist.poseIndexes.length;
 }
 
 function loadLevel(index: number) {
@@ -1143,9 +1303,24 @@ poseSelect.addEventListener('change', () => {
 });
 levelSelect.addEventListener('change', () => withLoading(() => loadLevel(Number(levelSelect.value))));
 pauseToggle.addEventListener('click', toggleAnimationPaused);
-playlistAddButton.addEventListener('click', addSelectedPoseToPlaylist);
-playlistStartButton.addEventListener('click', startPlaylistWithSelectedPose);
-playlistResetButton.addEventListener('click', resetPlaylistToAllPoses);
+playlistCreateButton.addEventListener('click', createPlaylist);
+playlistNameInput.addEventListener('input', updateEditingPlaylistName);
+playlistModalAddButton.addEventListener('click', addPoseToEditingPlaylist);
+playlistCloseButton.addEventListener('click', closePlaylistEditor);
+playlistDoneButton.addEventListener('click', closePlaylistEditor);
+deleteCancelButton.addEventListener('click', closeDeleteConfirm);
+deleteConfirmButton.addEventListener('click', confirmDeletePlaylist);
+playlistModal.addEventListener('click', (event) => {
+  if (event.target === playlistModal) closePlaylistEditor();
+});
+deleteConfirmModal.addEventListener('click', (event) => {
+  if (event.target === deleteConfirmModal) closeDeleteConfirm();
+});
+window.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (!deleteConfirmModal.hidden) closeDeleteConfirm();
+  else if (!playlistModal.hidden) closePlaylistEditor();
+});
 panelHandle.addEventListener('click', handlePanelClick);
 controlPanel.addEventListener('pointerdown', beginPanelGesture);
 controlPanel.addEventListener('pointerup', finishPanelGesture);
