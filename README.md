@@ -16,8 +16,10 @@ The current scope includes procedural character builders, part transforms, mater
 
 ## Deployment
 
-Vercel deploys pull requests to Preview and pushes to `main` to the `qa`
-pre-production environment. GitHub Actions runs the required build check.
-Production deployments are tracked from the `production` branch.
+Vercel deploys pull requests to Preview. The `qa` pre-production environment is
+configured to track `main`, but `main` automatic Vercel deploys are temporarily
+guarded because Vercel classified verified `main` events as Production. GitHub
+Actions runs the required build check, and Production is tracked from the
+`production` branch.
 
 See [docs/deployment.md](docs/deployment.md) for the CI contract.
