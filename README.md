@@ -7,3 +7,9 @@ The original editor came from SpaceChakra's Bone Cleaver work, introduced in [Vi
 This v0.01 seed preserves the usable editor workflow while replacing project-specific roster, story, and level data with generic sample content.
 
 The current scope includes procedural character builders, part transforms, material editing, pose previews, export sidecars, and a small level-object sandbox. The next overhauls can move this toward a cleaner reusable editor architecture without carrying source-game details forward.
+
+## Screenshots
+
+![VibeEditor sample roster with knight, samurai, and pirate procedural models](docs/screenshots/character-roster.png)
+
+![VibeEditor character editor showing the Randroid / Rusty sample model](docs/screenshots/character-editor.png)

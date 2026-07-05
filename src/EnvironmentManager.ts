@@ -164,22 +164,28 @@ export class EnvironmentManager {
   }
 
   private buildSampleYard() {
-    this.addFloor(this.makeMat(0x7b8079, 0.82, 0.0), 15, 10);
-    this.addBox('back-wall', [15, 2.2, 0.25], [0, 1.1, -5], this.makeMat(0x5c6470, 0.78, 0.0));
-    this.addBox('left-block', [1.6, 1.2, 1.6], [-4.2, 0.6, -1.5], this.makeMat(0x8a6f4f, 0.7, 0.0));
-    this.addBox('right-block', [1.2, 1.8, 1.2], [4.1, 0.9, -1.2], this.makeMat(0x596b76, 0.65, 0.05));
-    this.addBox('beam', [7, 0.18, 0.24], [0, 2.25, -2.8], this.makeMat(0x6b4d35, 0.55, 0.0), [0, 0.1, 0]);
+    const floorMat = this.makeTexturedMat(this.loadGravel(), 0xb8b7a0, 0.86, 0.0, 7, 5);
+    const wallMat = this.makeTexturedMat(this.loadCastleWall(), 0x9aa0a2, 0.78, 0.0, 6, 2);
+    const crateMat = this.makeTexturedMat(this.loadPlanks(), 0xc18a4d, 0.72, 0.0, 2.2, 2.2);
+    const blockMat = this.makeTexturedMat(this.loadRock(), 0x8a9697, 0.82, 0.0, 1.6, 1.6);
+    const beamMat = this.makeTexturedMat(this.loadWood(), 0x8b5a35, 0.68, 0.0, 5, 1);
+
+    this.addFloor(floorMat, 15, 10);
+    this.addBox('back-wall', [15, 2.2, 0.25], [0, 1.1, -5], wallMat);
+    this.addBox('left-crate', [1.6, 1.2, 1.6], [-4.2, 0.6, -1.5], crateMat);
+    this.addBox('right-stone-block', [1.2, 1.8, 1.2], [4.1, 0.9, -1.2], blockMat);
+    this.addBox('wood-beam', [7, 0.18, 0.24], [0, 2.25, -2.8], beamMat, [0, 0.1, 0]);
     this.addLight('warm-key', [3.5, 5.5, 2.5], 0xfff0d8, 2.2);
     this.addLight('cool-fill', [-4, 3, 4], 0x9ab8ff, 0.8);
   }
 
   private buildMaterialLab() {
-    this.addFloor(this.makeMat(0x30343b, 0.7, 0.0), 12, 8);
+    this.addFloor(this.makeTexturedMat(this.loadConcrete(), 0x505762, 0.76, 0.0, 5, 4), 12, 8);
     const mats = [
-      this.makeMat(0x8a8a8a, 0.25, 0.75),
-      this.makeMat(0x7a5135, 0.55, 0.0),
-      this.makeMat(0x415168, 0.35, 0.25),
-      this.makeMat(0x8b7252, 0.9, 0.0),
+      this.makeTexturedMat(this.loadSilverMetal(), 0xc6c6c6, 0.25, 0.75, 1.2, 1.2),
+      this.makeTexturedMat(this.loadWood(), 0xa36b3b, 0.58, 0.0, 1.5, 1.5),
+      this.makeTexturedMat(this.loadChainmail(), 0x657080, 0.38, 0.45, 2, 2),
+      this.makeTexturedMat(this.loadFabric(), 0x8b7252, 0.9, 0.0, 2, 2),
     ];
     for (let i = 0; i < mats.length; i++) {
       this.addBox(`material-block-${i + 1}`, [1.25, 1.25, 1.25], [-3 + i * 2, 0.65, -1.2], mats[i], [0.05, i * 0.2, 0]);
@@ -195,17 +201,17 @@ export class EnvironmentManager {
   }
 
   private buildBreakawayTest() {
-    this.addFloor(this.makeMat(0x555a53, 0.84, 0.0), 14, 9);
-    const matA = this.makeMat(0x6e7f8a, 0.7, 0.0);
-    const matB = this.makeMat(0x6f4d3c, 0.6, 0.0);
+    this.addFloor(this.makeTexturedMat(this.loadCrackedGround(), 0x89877c, 0.84, 0.0, 6, 4), 14, 9);
+    const matA = this.makeTexturedMat(this.loadConcrete(), 0x7e8790, 0.74, 0.0, 1.4, 1.4);
+    const matB = this.makeTexturedMat(this.loadCastleWall(), 0x806047, 0.68, 0.0, 1.2, 1.2);
     for (let x = -2; x <= 2; x++) {
       for (let y = 0; y < 3; y++) {
         this.addBox(`break-block-${x}-${y}`, [0.85, 0.48, 0.55], [x * 0.9, 0.25 + y * 0.52, -1.7], (x + y) % 2 ? matA.clone() : matB.clone(), [0, 0, 0]);
       }
     }
-    this.addBox('test-panel', [3.2, 1.2, 0.16], [0, 0.75, 1.5], this.makeMat(0x3b5768, 0.5, 0.0), [0, 0.15, 0]);
-    this.addBox('loose-beam-a', [2.3, 0.18, 0.18], [-3.8, 0.55, 0.4], this.makeMat(0x775136, 0.65, 0.0), [0.15, 0.55, 0.1]);
-    this.addBox('loose-beam-b', [2.0, 0.18, 0.18], [3.8, 0.48, 0.6], this.makeMat(0x775136, 0.65, 0.0), [0.08, -0.45, -0.08]);
+    this.addBox('test-panel', [3.2, 1.2, 0.16], [0, 0.75, 1.5], this.makeTexturedMat(this.loadMetal(), 0x5a7282, 0.48, 0.35, 2, 1), [0, 0.15, 0]);
+    this.addBox('loose-beam-a', [2.3, 0.18, 0.18], [-3.8, 0.55, 0.4], this.makeTexturedMat(this.loadWood(), 0x8a5935, 0.65, 0.0, 2.5, 1), [0.15, 0.55, 0.1]);
+    this.addBox('loose-beam-b', [2.0, 0.18, 0.18], [3.8, 0.48, 0.6], this.makeTexturedMat(this.loadWood(), 0x8a5935, 0.65, 0.0, 2.2, 1), [0.08, -0.45, -0.08]);
     this.addLight('break-key', [2.8, 5.5, 3.2], 0xfff2dc, 2.5);
   }
 
@@ -238,6 +244,17 @@ export class EnvironmentManager {
 
   private makeMat(color: number, roughness: number, metalness: number) {
     return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  }
+
+  private makeTexturedMat(set: TextureSet, color: number, roughness: number, metalness: number, repeatU = 1, repeatV = 1) {
+    const mat = this.makeMat(color, roughness, metalness);
+    mat.map = this.configureTexture(set.map, repeatU, repeatV, 0, true) || null;
+    mat.normalMap = this.configureTexture(set.normalMap, repeatU, repeatV, 0) || null;
+    mat.roughnessMap = this.configureTexture(set.roughnessMap, repeatU, repeatV, 0) || null;
+    mat.aoMap = this.configureTexture(set.aoMap, repeatU, repeatV, 0) || null;
+    mat.metalnessMap = this.configureTexture(set.metalnessMap, repeatU, repeatV, 0) || null;
+    mat.needsUpdate = true;
+    return mat;
   }
 
   private ensureStandardMaterial(mesh: THREE.Mesh): THREE.MeshStandardMaterial {
