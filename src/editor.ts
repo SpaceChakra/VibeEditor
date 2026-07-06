@@ -2786,6 +2786,17 @@ const gizmos = new GizmoManager({
     return (st[mode] as any)[ch][axis];
   },
   setValue: (ch, axis, v) => rows[ch][axis].set(v),
+  setScaleXYZ: (x, y, z) => {
+    // Suspend the XYZ lock for this batch: with the lock on, each per-axis
+    // write would expand to all three axes and the last one would win,
+    // collapsing the ratios the uniform-scale cube preserves.
+    const wasLocked = axisLocked.scl;
+    axisLocked.scl = false;
+    rows.scl.x.set(x);
+    rows.scl.y.set(y);
+    rows.scl.z.set(z);
+    axisLocked.scl = wasLocked;
+  },
   getTaper: which => state[partSel.value]?.taper[which] ?? 1,
   setTaper: (which, v) => taperRows[which].set(v),
   getTaperMeshes: () => {
@@ -2795,6 +2806,7 @@ const gizmos = new GizmoManager({
   },
   beginStep, commitStep,
 });
+(window as any).gizmos = gizmos; // debug handle, like scene/camera/controls above
 
 const gizmoBar = document.getElementById('gizmoBar')!;
 function setGizmoMode(m: GizmoMode) {

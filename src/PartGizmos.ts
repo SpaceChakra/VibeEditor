@@ -38,6 +38,10 @@ export interface GizmoHost {
   getMode(): 'hierarchy' | 'part';
   getValue(ch: 'pos' | 'rot' | 'scl', axis: GizmoAxis): number;
   setValue(ch: 'pos' | 'rot' | 'scl', axis: GizmoAxis, v: number): void;
+  /** Set all three scale axes as one batch. Must not let the panel's XYZ-lock
+   *  expansion apply (each per-axis write would overwrite the previous ones,
+   *  destroying the ratios the uniform-scale cube preserves). */
+  setScaleXYZ(x: number, y: number, z: number): void;
   getTaper(which: 'top' | 'bottom'): number;
   setTaper(which: 'top' | 'bottom', v: number): void;
   getTaperMeshes(): THREE.Mesh[];
@@ -127,9 +131,8 @@ export class GizmoManager {
   private drag: DragState | null = null;
   private hovered: Handle | null = null;
   private readout: HTMLDivElement;
-  // Hit meshes of the currently visible handles, rebuilt when the mode changes.
+  // Hit meshes of the currently visible handles, rebuilt by setMode().
   private activeHits: THREE.Mesh[] = [];
-  private hitCacheMode: GizmoMode | null = null;
   private overlayRect: DOMRect | null = null; // cached for the drag's duration
 
   private raycaster = new THREE.Raycaster();
@@ -148,6 +151,7 @@ export class GizmoManager {
     this.root.visible = false;
     host.scene.add(this.root);
     this.buildHandles();
+    this.setMode(this.mode); // initialize handle visibility + hit list
 
     this.readout = document.createElement('div');
     this.readout.id = 'gizmoReadout';
@@ -165,8 +169,12 @@ export class GizmoManager {
     if (this.drag) this.endDrag();
     this.mode = m;
     this.setHover(null);
-    // No eager update() — the render loop calls update() every frame, and this
-    // can run at module-init time before the editor's tab state exists.
+    // Apply handle visibility and the hit list synchronously — a pointerdown
+    // can arrive before the next animation frame runs update(), and it must
+    // not raycast the previous mode's handles. (Positions/orientations still
+    // come from update(); they need the node and camera, this doesn't.)
+    for (const h of this.handles) h.container.visible = h.mode === m;
+    this.activeHits = this.handles.filter(h => h.container.visible).map(h => h.hit);
   }
 
   // ---------------------------------------------------------------------------
@@ -248,12 +256,6 @@ export class GizmoManager {
     node.updateWorldMatrix(true, false);
     this._origin.setFromMatrixPosition(node.matrixWorld);
     const gscale = this.worldPerPixel(this._origin) * GIZMO_PX;
-
-    if (this.hitCacheMode !== this.mode) {
-      this.hitCacheMode = this.mode;
-      for (const h of this.handles) h.container.visible = h.mode === this.mode;
-      this.activeHits = this.handles.filter(h => h.container.visible).map(h => h.hit);
-    }
 
     if (this.mode === 'move' || this.mode === 'scale') {
       // Arrows point along the frame axes the value lives in.
@@ -557,9 +559,10 @@ export class GizmoManager {
       this.host.setValue('scl', d.axis, Math.max(0.01, d.startVal + along * SCALE_PER_PX));
     } else if (d.kind === 'uniform') {
       const f = Math.max(0.02, 1 + (dx - dy) * UNIFORM_PER_PX);
-      for (const axis of AXES) {
-        this.host.setValue('scl', axis, Math.max(0.01, d.startVals[axis] * f));
-      }
+      this.host.setScaleXYZ(
+        Math.max(0.01, d.startVals.x * f),
+        Math.max(0.01, d.startVals.y * f),
+        Math.max(0.01, d.startVals.z * f));
     } else {
       let val: number;
       if (d.pixelDir) {
@@ -626,8 +629,12 @@ export class GizmoManager {
   private screenDir(at: THREE.Vector3, worldDir: THREE.Vector3): THREE.Vector2 {
     const cam = this.host.camera;
     const rect = this.host.domElement.getBoundingClientRect();
-    const a = this._v2.copy(at).project(cam);
-    const b = this._v3.copy(at).addScaledVector(worldDir, 0.001 + at.distanceTo(cam.position) * 0.05).project(cam);
+    // Callers pass scratch vectors as `worldDir`/`at`; copy before touching any
+    // scratch so aliasing can't clobber the inputs. (Drag start only — not hot.)
+    const dirWorld = worldDir.clone();
+    const atWorld = at.clone();
+    const a = this._v2.copy(atWorld).project(cam);
+    const b = this._v3.copy(atWorld).addScaledVector(dirWorld, 0.001 + atWorld.distanceTo(cam.position) * 0.05).project(cam);
     const dir = new THREE.Vector2((b.x - a.x) * rect.width / 2, -(b.y - a.y) * rect.height / 2);
     if (dir.lengthSq() < 1e-12) dir.set(1, 0);
     else dir.normalize();
