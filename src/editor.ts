@@ -37,6 +37,8 @@ import { CharacterBuilder } from './CharacterBuilder';
 import { WarriorType } from './warriors/types';
 import type { CharacterRig } from './warriors/types';
 import { EnvironmentManager, LEVELS } from './EnvironmentManager';
+import { GizmoManager, GIZMO_MODES } from './PartGizmos';
+import type { GizmoMode } from './PartGizmos';
 
 const AXES = ['x', 'y', 'z'] as const;
 type Axis = typeof AXES[number];
@@ -1351,13 +1353,14 @@ const RANGES = {
   scl: { min: 0.1, max: 3, step: 0.01 },
 };
 
-interface RowRefs { range: HTMLInputElement; num: HTMLInputElement; }
+// `set` drives the row programmatically (used by the 3D gizmos) through the
+// exact same code path as slider input.
+interface RowRefs { range: HTMLInputElement; num: HTMLInputElement; set: (v: number) => void; }
 const rows: Record<'pos' | 'rot' | 'scl', Record<Axis, RowRefs>> = {
   pos: {} as any, rot: {} as any, scl: {} as any,
 };
 const axisLocked: Record<'pos' | 'rot' | 'scl', boolean> = { pos: false, rot: false, scl: false };
-interface TaperRowRefs { range: HTMLInputElement; num: HTMLInputElement; }
-const taperRows: Record<'top' | 'bottom', TaperRowRefs> = {} as any;
+const taperRows: Record<'top' | 'bottom', RowRefs> = {} as any;
 const TAPER_RANGE = { min: 0, max: 2, step: 0.01 };
 
 function buildRows(containerId: string, channel: 'pos' | 'rot' | 'scl') {
@@ -1375,7 +1378,6 @@ function buildRows(containerId: string, channel: 'pos' | 'rot' | 'scl') {
     num.type = 'text'; num.inputMode = 'decimal'; num.className = 'num';
     row.append(lbl, range, num);
     container.append(row);
-    rows[channel][axis] = { range, num };
 
     const onInput = (val: number) => {
       if (!pendingSnapshot) beginStep();
@@ -1403,6 +1405,7 @@ function buildRows(containerId: string, channel: 'pos' | 'rot' | 'scl') {
         if (mirrorChk.checked && !selectedKeys.has(mirrorPartner(k) ?? '')) applyMirror(k, mode);
       }
     };
+    rows[channel][axis] = { range, num, set: onInput };
     range.addEventListener('input', () => onInput(parseFloat(range.value)));
     num.addEventListener('input', () => { const raw = num.value; if (raw === '' || raw === '-' || raw.endsWith('.')) return; const v = parseFloat(raw); if (!isNaN(v)) onInput(v); });
     // Normalize display (e.g. "1." → "1") when leaving the field.
@@ -1444,7 +1447,6 @@ function buildTaperRows() {
     num.type = 'text'; num.inputMode = 'decimal'; num.className = 'num';
     row.append(lbl, range, num);
     container.append(row);
-    taperRows[which] = { range, num };
 
     const onInput = (val: number) => {
       const key = partSel.value;
@@ -1466,6 +1468,7 @@ function buildTaperRows() {
         }
       }
     };
+    taperRows[which] = { range, num, set: onInput };
     range.addEventListener('input', () => onInput(parseFloat(range.value)));
     num.addEventListener('input', () => { const raw = num.value; if (raw === '' || raw === '-' || raw.endsWith('.')) return; const v = parseFloat(raw); if (!isNaN(v)) onInput(v); });
     num.addEventListener('blur', () => { const v = parseFloat(num.value); if (!isNaN(v)) num.value = String(round(v)); });
@@ -2764,6 +2767,50 @@ buildRows('rotRows', 'rot');
 buildRows('sclRows', 'scl');
 buildTaperRows();
 
+// -----------------------------------------------------------------------------
+// Viewport gizmos — draggable 3D handles for Position / Rotation / Scale /
+// Taper on the selected part. They route through the same row setters the
+// panel sliders use, so undo steps, mirroring, multi-select propagation, and
+// foot compensation all behave identically to slider edits.
+// -----------------------------------------------------------------------------
+const gizmos = new GizmoManager({
+  camera, scene,
+  domElement: renderer.domElement,
+  overlayEl: viewEl,
+  getNode: () => (activeTab === 'model' && state[partSel.value] ? nodes[partSel.value] ?? null : null),
+  getMode: () => (hierChk.checked ? 'hierarchy' : 'part'),
+  getValue: (ch, axis) => {
+    const st = state[partSel.value];
+    if (!st) return ch === 'scl' ? 1 : 0;
+    const mode: Mode = hierChk.checked ? 'hierarchy' : 'part';
+    return (st[mode] as any)[ch][axis];
+  },
+  setValue: (ch, axis, v) => rows[ch][axis].set(v),
+  getTaper: which => state[partSel.value]?.taper[which] ?? 1,
+  setTaper: (which, v) => taperRows[which].set(v),
+  getTaperMeshes: () => {
+    const entries = baseTaperVerts[partSel.value];
+    // Parts without taper targets still get rings sized to their meshes.
+    return entries?.length ? entries.map(e => e.mesh) : charGetMeshList(partSel.value);
+  },
+  beginStep, commitStep,
+});
+
+const gizmoBar = document.getElementById('gizmoBar')!;
+function setGizmoMode(m: GizmoMode) {
+  gizmos.setMode(m);
+  gizmoBar.querySelectorAll<HTMLButtonElement>('button[data-gizmo]').forEach(b =>
+    b.classList.toggle('active', b.dataset.gizmo === m));
+  try { localStorage.setItem('editorGizmoMode', m); } catch {}
+}
+gizmoBar.querySelectorAll<HTMLButtonElement>('button[data-gizmo]').forEach(b =>
+  b.addEventListener('click', () => setGizmoMode(b.dataset.gizmo as GizmoMode)));
+// Q/W/E/R/T (standard DCC bindings) — handled in the global keydown listener below.
+const GIZMO_KEYS: Record<string, GizmoMode> = { q: 'off', w: 'move', e: 'rotate', r: 'scale', t: 'taper' };
+let savedGizmoMode: string | null = null;
+try { savedGizmoMode = localStorage.getItem('editorGizmoMode'); } catch {}
+setGizmoMode(GIZMO_MODES.includes(savedGizmoMode as GizmoMode) ? savedGizmoMode as GizmoMode : 'move');
+
 for (const [id, ch] of [['lockPos', 'pos'], ['lockRot', 'rot'], ['lockScl', 'scl']] as const) {
   const btn = document.getElementById(id) as HTMLButtonElement;
   btn.addEventListener('click', () => {
@@ -2996,6 +3043,7 @@ function switchTab(tab: EditorTab) {
   document.getElementById('tabModel')!.classList.toggle('active', tab === 'model');
   document.getElementById('tabLight')!.classList.toggle('active', tab === 'lighting');
   document.getElementById('tabLevel')!.classList.toggle('active', tab === 'level');
+  gizmoBar.style.display = tab === 'model' ? '' : 'none';
   if (tab === 'lighting') buildLightingPanel();
   if (tab === 'level') lvlEnter();
   else if (wasLevel) lvlLeave();
@@ -3515,6 +3563,12 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'Delete' && activeTab !== 'level') {
     e.preventDefault();
     deleteSelectedExtra();
+  } else if (!e.ctrlKey && !e.metaKey && !e.altKey && activeTab === 'model'
+      && GIZMO_KEYS[e.key.toLowerCase()]
+      && !(t && (t.tagName === 'INPUT' || t.tagName === 'SELECT'))) {
+    // Q/W/E/R/T — gizmo mode (guard range/select inputs, which inText misses).
+    e.preventDefault();
+    setGizmoMode(GIZMO_KEYS[e.key.toLowerCase()]);
   }
 });
 
@@ -3538,6 +3592,7 @@ const ndc = new THREE.Vector2();
 let downX = 0, downY = 0;
 renderer.domElement.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
 renderer.domElement.addEventListener('pointerup', (e) => {
+  // (Gizmo drags never reach here — the gizmo consumes its pointerup in the capture phase.)
   // Treat as a click only if the pointer barely moved (so orbit drags don't select).
   if (Math.abs(e.clientX - downX) > 4 || Math.abs(e.clientY - downY) > 4) return;
   if (e.button !== 0) return;
@@ -4572,6 +4627,7 @@ function animate() {
   const dt = Math.min(0.05, (now - _lastFrameTime) * 0.001);
   _lastFrameTime = now;
   if (!updateGamepadCamera(dt)) controls.update();
+  gizmos.update();
   const t = now * 0.001;
   if (activeTab === 'level') {
     if (lvlEnvMgr) (lvlEnvMgr as any).update(t);
